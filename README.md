@@ -1,13 +1,65 @@
+Moquette is also used into [Atomize Spin](http://atomizesoftware.com/spin) a software solution for the logistic field.
 
-## AWS Greengrass MQTT(Moquette) Broker
+Part of moquette are used into the [Vertx MQTT module](https://github.com/giovibal/vertx-mqtt-broker-mod), into [MQTT spy](http://kamilfb.github.io/mqtt-spy/)
+and into [WSO2 Messge broker](http://techexplosives-pamod.blogspot.it/2014/05/mqtt-transport-architecture-wso2-mb-3x.html).
 
-An MQTT complaint broker customized to work with greengrass v2. Source broker code is forked from [Moquette](https://github.com/moquette-io/moquette). 
+## Try the demo instance
+
+Point your browser to [cloud instance](http://broker.moquette.io), request an account then use it from your MQTT clients.
+
+## 1 minute set up
+
+Start play with it, download the self distribution tar from [BinTray](https://bintray.com/artifact/download/andsel/generic/moquette-0.12.1.tar.gz) ,
+the un untar and start the broker listening on `1883` port and enjoy!
+
+```
+tar xvf moquette-distribution-0.12.1.tar.gz
+cd bin
+./moquette.sh
+```
+
+Or if you are on Windows shell
+
+```
+ cd bin
+ .\moquette.bat
+```
+
+## Embedding in other projects
+
+To embed Moquette in another maven project is sufficient to include a repository and declare the dependency: 
+
+```
+<repositories>
+  <repository>
+    <id>bintray</id>
+    <url>https://jcenter.bintray.com</url>
+    <releases>
+      <enabled>true</enabled>
+    </releases>
+    <snapshots>
+      <enabled>false</enabled>
+    </snapshots>
+  </repository>
+</repositories>
+```
+
+Include dependency in your project: 
+
+```
+<dependency>
+      <groupId>io.moquette</groupId>
+      <artifactId>moquette-broker</artifactId>
+      <version>0.12.1</version>
+</dependency>
+```
+
+## Build from sources
 
 
-## Security
+After a git clone of the repository, cd into the cloned sources and: `./gradlew clean moquette-distribution:distMoquetteTar` or
+`./gradlew clean moquette-distribution:distMoquetteZip`.
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
-## License
-
-This project is licensed under the Apache-2.0 License.
+In distribution/build directory will be produced the selfcontained file for the broker with all dependencies and a running script. 
+  
