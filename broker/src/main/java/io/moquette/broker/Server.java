@@ -13,19 +13,28 @@
  *
  * You may elect to redistribute this code under either of these licenses.
  */
+
 package io.moquette.broker;
 
 import io.moquette.BrokerConstants;
-import io.moquette.broker.config.*;
+import io.moquette.broker.config.FileResourceLoader;
+import io.moquette.broker.config.IConfig;
+import io.moquette.broker.config.IResourceLoader;
+import io.moquette.broker.config.MemoryConfig;
+import io.moquette.broker.config.ResourceLoaderConfig;
+import io.moquette.broker.security.ACLFileParser;
+import io.moquette.broker.security.AcceptAllAuthenticator;
+import io.moquette.broker.security.DenyAllAuthorizatorPolicy;
+import io.moquette.broker.security.IAuthenticator;
+import io.moquette.broker.security.IAuthorizatorPolicy;
+import io.moquette.broker.security.PermitAllAuthorizatorPolicy;
+import io.moquette.broker.security.ResourceAuthenticator;
+import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
+import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
+import io.moquette.interception.BrokerInterceptor;
 import io.moquette.interception.InterceptHandler;
 import io.moquette.persistence.H2Builder;
 import io.moquette.persistence.MemorySubscriptionsRepository;
-import io.moquette.interception.BrokerInterceptor;
-import io.moquette.broker.security.*;
-import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
-import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
-import io.moquette.broker.security.IAuthenticator;
-import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +43,11 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -51,6 +64,7 @@ public class Server {
     private BrokerInterceptor interceptor;
     private H2Builder h2Builder;
     private SessionRegistry sessions;
+    private MQTTBridge mqttBridge;
 
     public static void main(String[] args) throws IOException {
         final Server server = new Server();
@@ -67,7 +81,8 @@ public class Server {
      */
     public void startServer() throws IOException {
         File defaultConfigurationFile = defaultConfigFile();
-        LOG.info("Starting Moquette integration. Configuration file path={}", defaultConfigurationFile.getAbsolutePath());
+        LOG.info("Starting Moquette integration. Configuration file path={}",
+            defaultConfigurationFile.getAbsolutePath());
         IResourceLoader filesystemLoader = new FileResourceLoader(defaultConfigurationFile);
         final IConfig config = new ResourceLoaderConfig(filesystemLoader);
         startServer(config);
@@ -121,8 +136,7 @@ public class Server {
     }
 
     /**
-     * Starts Moquette with config provided by an implementation of IConfig class and with the set
-     * of InterceptHandler.
+     * Starts Moquette with config provided by an implementation of IConfig class and with the set of InterceptHandler.
      *
      * @param config   the configuration to use to start the broker.
      * @param handlers the handlers to install in the broker.
@@ -180,8 +194,8 @@ public class Server {
         sessions = new SessionRegistry(subscriptions, queueRepository, authorizator);
         dispatcher = new PostOffice(subscriptions, retainedRepository, sessions, interceptor, authorizator);
         final BrokerConfiguration brokerConfig = new BrokerConfiguration(config);
-        MQTTConnectionFactory connectionFactory = new MQTTConnectionFactory(brokerConfig, authenticator, sessions,
-                                                                            dispatcher);
+        MQTTConnectionFactory connectionFactory =
+            new MQTTConnectionFactory(brokerConfig, authenticator, sessions, dispatcher);
 
         final NewNettyMQTTHandler mqttHandler = new NewNettyMQTTHandler(connectionFactory);
         acceptor = new NewNettyAcceptor();
@@ -190,6 +204,9 @@ public class Server {
         final long startTime = System.currentTimeMillis() - start;
         LOG.info("Moquette integration has been started successfully in {} ms", startTime);
         initialized = true;
+
+        mqttBridge = new MQTTBridge(connectionFactory);
+        mqttBridge.start();
     }
 
     private IAuthorizatorPolicy initializeAuthorizatorPolicy(IAuthorizatorPolicy authorizatorPolicy, IConfig props) {
@@ -245,8 +262,8 @@ public class Server {
         List<InterceptHandler> observers = new ArrayList<>(embeddedObservers);
         String interceptorClassName = props.getProperty(BrokerConstants.INTERCEPT_HANDLER_PROPERTY_NAME);
         if (interceptorClassName != null && !interceptorClassName.isEmpty()) {
-            InterceptHandler handler = loadClass(interceptorClassName, InterceptHandler.class,
-                                                 io.moquette.broker.Server.class, this);
+            InterceptHandler handler =
+                loadClass(interceptorClassName, InterceptHandler.class, io.moquette.broker.Server.class, this);
             if (handler != null) {
                 observers.add(handler);
             }
@@ -261,29 +278,24 @@ public class Server {
             // check if constructor with constructor arg class parameter
             // exists
             LOG.info("Invoking constructor with {} argument. ClassName={}, interfaceName={}",
-                     constructorArgClass.getName(), className, intrface.getName());
-            instance = this.getClass().getClassLoader()
-                .loadClass(className)
-                .asSubclass(intrface)
-                .getConstructor(constructorArgClass)
-                .newInstance(props);
+                constructorArgClass.getName(), className, intrface.getName());
+            instance = this.getClass().getClassLoader().loadClass(className).asSubclass(intrface)
+                .getConstructor(constructorArgClass).newInstance(props);
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException ex) {
-            LOG.warn("Unable to invoke constructor with {} argument. ClassName={}, interfaceName={}, cause={}, " +
-                     "errorMessage={}", constructorArgClass.getName(), className, intrface.getName(), ex.getCause(),
-                     ex.getMessage());
+            LOG.warn("Unable to invoke constructor with {} argument. ClassName={}, interfaceName={}, cause={}, "
+                    + "errorMessage={}", constructorArgClass.getName(), className, intrface.getName(), ex.getCause(),
+                ex.getMessage());
             return null;
         } catch (NoSuchMethodException | InvocationTargetException e) {
             try {
                 LOG.info("Invoking default constructor. ClassName={}, interfaceName={}", className, intrface.getName());
                 // fallback to default constructor
-                instance = this.getClass().getClassLoader()
-                    .loadClass(className)
-                    .asSubclass(intrface)
-                    .getDeclaredConstructor().newInstance();
-            } catch (InstantiationException | IllegalAccessException | ClassNotFoundException |
-                NoSuchMethodException | InvocationTargetException ex) {
-                LOG.error("Unable to invoke default constructor. ClassName={}, interfaceName={}, cause={}, " +
-                          "errorMessage={}", className, intrface.getName(), ex.getCause(), ex.getMessage());
+                instance =
+                    this.getClass().getClassLoader().loadClass(className).asSubclass(intrface).getDeclaredConstructor()
+                        .newInstance();
+            } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | NoSuchMethodException | InvocationTargetException ex) {
+                LOG.error("Unable to invoke default constructor. ClassName={}, interfaceName={}, cause={}, "
+                    + "errorMessage={}", className, intrface.getName(), ex.getCause(), ex.getMessage());
                 return null;
             }
         }
@@ -292,8 +304,8 @@ public class Server {
     }
 
     /**
-     * Use the broker to publish a message. It's intended for embedding applications. It can be used
-     * only after the integration is correctly started with startServer.
+     * Use the broker to publish a message. It's intended for embedding applications. It can be used only after the
+     * integration is correctly started with startServer.
      *
      * @param msg      the message to forward.
      * @param clientId the id of the sending integration.
@@ -303,7 +315,7 @@ public class Server {
         final int messageID = msg.variableHeader().packetId();
         if (!initialized) {
             LOG.error("Moquette is not started, internal message cannot be published. CId: {}, messageId: {}", clientId,
-                      messageID);
+                messageID);
             throw new IllegalStateException("Can't publish on a integration is not yet started");
         }
         LOG.trace("Internal publishing message CId: {}, messageId: {}", clientId, messageID);
@@ -311,6 +323,11 @@ public class Server {
     }
 
     public void stopServer() {
+        // Stop the bridge
+        if (mqttBridge != null) {
+            mqttBridge.stop();
+        }
+
         LOG.info("Unbinding integration from the configured ports");
         acceptor.close();
         LOG.trace("Stopping MQTT protocol processor");
@@ -342,13 +359,13 @@ public class Server {
      *
      * @return list of subscriptions.
      */
-// TODO reimplement this
-//    public List<Subscription> getSubscriptions() {
-//        if (m_processorBootstrapper == null) {
-//            return null;
-//        }
-//        return this.subscriptionsStore.listAllSubscriptions();
-//    }
+    // TODO reimplement this
+    //    public List<Subscription> getSubscriptions() {
+    //        if (m_processorBootstrapper == null) {
+    //            return null;
+    //        }
+    //        return this.subscriptionsStore.listAllSubscriptions();
+    //    }
 
     /**
      * SPI method used by Broker embedded applications to add intercept handlers.
@@ -382,7 +399,7 @@ public class Server {
 
     /**
      * Return a list of descriptors of connected clients.
-     * */
+     */
     public Collection<ClientDescriptor> listConnectedClients() {
         return sessions.listConnectedClients();
     }

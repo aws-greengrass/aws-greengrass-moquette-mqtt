@@ -63,7 +63,7 @@ class PostOffice {
     }
 
     public void subscribeClientToTopics(MqttSubscribeMessage msg, String clientID, String username,
-                                        MQTTConnection mqttConnection) {
+                                        IMQTTConnection mqttConnection) {
         // verify which topics of the subscribe ongoing has read access permission
         int messageID = messageId(msg);
         List<MqttTopicSubscription> ackTopics = authorizator.verifyTopicsReadAccess(clientID, username, msg);
@@ -132,7 +132,7 @@ class PostOffice {
         return new MqttSubAckMessage(fixedHeader, from(messageId), payload);
     }
 
-    public void unsubscribe(List<String> topics, MQTTConnection mqttConnection, int messageId) {
+    public void unsubscribe(List<String> topics, IMQTTConnection mqttConnection, int messageId) {
         final String clientID = mqttConnection.getClientId();
         for (String t : topics) {
             Topic topic = new Topic(t);
@@ -151,7 +151,7 @@ class PostOffice {
             // TODO remove the subscriptions to Session
 //            clientSession.unsubscribeFrom(topic);
 
-            String username = NettyUtils.userName(mqttConnection.channel);
+            String username = mqttConnection.getUsername();
             interceptor.notifyTopicUnsubscribed(topic.toString(), clientID, username);
         }
 
@@ -175,7 +175,7 @@ class PostOffice {
         interceptor.notifyTopicPublished(msg, clientID, username);
     }
 
-    void receivedPublishQos1(MQTTConnection connection, Topic topic, String username, ByteBuf payload, int messageID,
+    void receivedPublishQos1(IMQTTConnection connection, Topic topic, String username, ByteBuf payload, int messageID,
                              boolean retain, MqttPublishMessage msg) {
         // verify if topic can be write
         topic.getTokens();
@@ -232,7 +232,7 @@ class PostOffice {
      * First phase of a publish QoS2 protocol, sent by publisher to the broker. Publish to all interested
      * subscribers.
      */
-    void receivedPublishQos2(MQTTConnection connection, MqttPublishMessage mqttPublishMessage, String username) {
+    void receivedPublishQos2(IMQTTConnection connection, MqttPublishMessage mqttPublishMessage, String username) {
         LOG.trace("Processing PUBREL message on connection: {}", connection);
         final Topic topic = new Topic(mqttPublishMessage.variableHeader().topicName());
         final ByteBuf payload = mqttPublishMessage.payload();

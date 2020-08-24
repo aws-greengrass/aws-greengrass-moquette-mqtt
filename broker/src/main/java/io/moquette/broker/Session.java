@@ -90,7 +90,7 @@ class Session {
     private Will will;
     private Queue<SessionRegistry.EnqueuedMessage> sessionQueue;
     private final AtomicReference<SessionStatus> status = new AtomicReference<>(SessionStatus.DISCONNECTED);
-    private MQTTConnection mqttConnection;
+    private IMQTTConnection mqttConnection;
     private List<Subscription> subscriptions = new ArrayList<>();
     private final Map<Integer, SessionRegistry.EnqueuedMessage> inflightWindow = new HashMap<>();
     private final DelayQueue<InFlightPacket> inflightTimeouts = new DelayQueue<>();
@@ -117,7 +117,7 @@ class Session {
         assignState(SessionStatus.DISCONNECTED, SessionStatus.CONNECTED);
     }
 
-    void bind(MQTTConnection mqttConnection) {
+    void bind(IMQTTConnection mqttConnection) {
         this.mqttConnection = mqttConnection;
     }
 
@@ -265,13 +265,13 @@ class Session {
         return sessionQueue.isEmpty() &&
             inflightSlots.get() > 0 &&
             connected() &&
-            mqttConnection.channel.isWritable();
+            mqttConnection.isWritable();
     }
 
     private boolean inflighHasSlotsAndConnectionIsUp() {
         return inflightSlots.get() > 0 &&
             connected() &&
-            mqttConnection.channel.isWritable();
+            mqttConnection.isWritable();
     }
 
     void pubAckReceived(int ackPacketId) {

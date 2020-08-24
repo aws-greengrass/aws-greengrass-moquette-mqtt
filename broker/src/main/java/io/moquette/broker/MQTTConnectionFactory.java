@@ -36,4 +36,8 @@ class MQTTConnectionFactory {
     MQTTConnection create(Channel channel) {
         return new MQTTConnection(channel, brokerConfig, authenticator, sessionRegistry, postOffice);
     }
+
+    IPCMQTTConnection createIPCMQTTConnection(IIPCBridge iipcBridge) {
+        return new IPCMQTTConnection(iipcBridge, brokerConfig, authenticator, sessionRegistry, postOffice);
+    }
 }

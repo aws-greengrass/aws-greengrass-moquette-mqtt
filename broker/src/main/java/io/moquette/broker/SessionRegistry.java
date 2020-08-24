@@ -75,7 +75,7 @@ public class SessionRegistry {
         this.authorizator = authorizator;
     }
 
-    void bindToSession(MQTTConnection mqttConnection, MqttConnectMessage msg, String clientId) {
+    void bindToSession(IMQTTConnection mqttConnection, MqttConnectMessage msg, String clientId) {
         boolean isSessionAlreadyStored = false;
         PostConnectAction postConnectAction = PostConnectAction.NONE;
         if (!pool.containsKey(clientId)) {
@@ -107,7 +107,7 @@ public class SessionRegistry {
         }
     }
 
-    private PostConnectAction bindToExistingSession(MQTTConnection mqttConnection, MqttConnectMessage msg,
+    private PostConnectAction bindToExistingSession(IMQTTConnection mqttConnection, MqttConnectMessage msg,
                                                     String clientId, Session newSession) {
         PostConnectAction postConnectAction = PostConnectAction.NONE;
         final boolean newIsClean = msg.variableHeader().isCleanSession();
@@ -192,7 +192,7 @@ public class SessionRegistry {
         }
     }
 
-    private Session createNewSession(MQTTConnection mqttConnection, MqttConnectMessage msg, String clientId) {
+    private Session createNewSession(IMQTTConnection mqttConnection, MqttConnectMessage msg, String clientId) {
         final boolean clean = msg.variableHeader().isCleanSession();
         final Queue<SessionRegistry.EnqueuedMessage> sessionQueue =
                     queues.computeIfAbsent(clientId, (String cli) -> queueRepository.createQueue(cli, clean));
