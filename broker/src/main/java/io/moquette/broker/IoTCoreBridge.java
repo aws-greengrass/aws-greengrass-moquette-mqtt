@@ -17,7 +17,6 @@ public class IoTCoreBridge implements IIPCBridge {
 
     public void start() {
         ipcmqttConnection.connect(this.getClass().getSimpleName());
-        ipcmqttConnection.subscribe("#", AT_LEAST_ONCE);
     }
 
     public void stop() {
