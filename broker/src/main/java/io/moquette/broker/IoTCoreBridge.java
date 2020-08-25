@@ -4,19 +4,17 @@ import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static io.netty.handler.codec.mqtt.MqttQoS.AT_LEAST_ONCE;
-
-public class IoTCoreBridge implements IIPCBridge {
+public class IoTCoreBridge implements IGGBridge {
 
     private static final Logger LOG = LoggerFactory.getLogger(IoTCoreBridge.class);
-    private IPCMQTTConnection ipcmqttConnection;
+    private GGMQTTConnection ggmqttConnection;
 
     public IoTCoreBridge(MQTTConnectionFactory mqttConnectionFactory) {
-        ipcmqttConnection = mqttConnectionFactory.createIPCMQTTConnection(this);
+        ggmqttConnection = mqttConnectionFactory.createGGMQTTConnection(this);
     }
 
     public void start() {
-        ipcmqttConnection.connect(this.getClass().getSimpleName());
+        ggmqttConnection.connect(this.getClass().getSimpleName());
     }
 
     public void stop() {
@@ -24,11 +22,11 @@ public class IoTCoreBridge implements IIPCBridge {
     }
 
     @Override
-    public void publishToIPC(MqttPublishMessage publishMsg) {
+    public void publishToGG(MqttPublishMessage publishMsg) {
         final int packetId = publishMsg.variableHeader().packetId();
         final String topicName = publishMsg.variableHeader().topicName();
         LOG.debug("Sending message to IoTCore proxy. MessageId={}, topic={}", packetId, topicName);
 
-        // TODO: Publish to IPC
+        // TODO: Publish to GG
     }
 }

@@ -48,23 +48,23 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 
-final class IPCMQTTConnection implements IMQTTConnection {
+final class GGMQTTConnection implements IMQTTConnection {
 
-    private static final Logger LOG = LoggerFactory.getLogger(IPCMQTTConnection.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GGMQTTConnection.class);
 
     private BrokerConfiguration brokerConfig;
     private IAuthenticator authenticator;
     private SessionRegistry sessionRegistry;
     private final PostOffice postOffice;
     private boolean connected;
-    private IIPCBridge ipcBridge;
+    private IGGBridge ggBridge;
     private final AtomicInteger lastPacketId = new AtomicInteger(0);
     private String clientId;
     private String username;
 
-    IPCMQTTConnection(IIPCBridge ipcBridge, BrokerConfiguration brokerConfig, IAuthenticator authenticator,
-                      SessionRegistry sessionRegistry, PostOffice postOffice) {
-        this.ipcBridge = ipcBridge;
+    GGMQTTConnection(IGGBridge ggBridge, BrokerConfiguration brokerConfig, IAuthenticator authenticator,
+                     SessionRegistry sessionRegistry, PostOffice postOffice) {
+        this.ggBridge = ggBridge;
         this.brokerConfig = brokerConfig;
         this.authenticator = authenticator;
         this.sessionRegistry = sessionRegistry;
@@ -95,7 +95,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
 
     public void handleMessage(MqttMessage msg) {
         MqttMessageType messageType = msg.fixedHeader().messageType();
-        LOG.debug("Received MQTT message, type: {}, channel: {}", messageType, "IPCMQTTConnection");
+        LOG.debug("Received MQTT message, type: {}, channel: {}", messageType, "GGMQTTConnection");
         switch (messageType) {
             case CONNECT:
                 processConnect((MqttConnectMessage) msg);
@@ -131,7 +131,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
                 //channel.writeAndFlush(pingResp).addListener(CLOSE_ON_FAILURE);
                 break;
             default:
-                LOG.error("Unknown MessageType: {}, channel: {}", messageType, "IPCMQTTConnection");
+                LOG.error("Unknown MessageType: {}, channel: {}", messageType, "GGMQTTConnection");
                 break;
         }
     }
@@ -164,10 +164,10 @@ final class IPCMQTTConnection implements IMQTTConnection {
         String clientId = payload.clientIdentifier();
         final String username = payload.userName();
         LOG.trace("Processing CONNECT message. CId={} username: {} channel: {}", clientId, username,
-            "IPCMQTTConnection");
+            "GGMQTTConnection");
 
         if (isNotProtocolVersion(msg, MqttVersion.MQTT_3_1) && isNotProtocolVersion(msg, MqttVersion.MQTT_3_1_1)) {
-            LOG.warn("MQTT protocol version is not valid. CId={} channel: {}", clientId, "IPCMQTTConnection");
+            LOG.warn("MQTT protocol version is not valid. CId={} channel: {}", clientId, "GGMQTTConnection");
             abortConnection(CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION);
             return;
         }
@@ -175,14 +175,14 @@ final class IPCMQTTConnection implements IMQTTConnection {
         if (clientId == null || clientId.length() == 0) {
             if (!brokerConfig.isAllowZeroByteClientId()) {
                 LOG.warn("Broker doesn't permit MQTT empty client ID. Username: {}, channel: {}", username,
-                    "IPCMQTTConnection");
+                    "GGMQTTConnection");
                 abortConnection(CONNECTION_REFUSED_IDENTIFIER_REJECTED);
                 return;
             }
 
             if (!cleanSession) {
                 LOG.warn("MQTT client ID cannot be empty for persistent session. Username: {}, channel: {}", username,
-                    "IPCMQTTConnection");
+                    "GGMQTTConnection");
                 abortConnection(CONNECTION_REFUSED_IDENTIFIER_REJECTED);
                 return;
             }
@@ -190,7 +190,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
             // Generating client id.
             clientId = UUID.randomUUID().toString().replace("-", "");
             LOG.debug("Client has connected with integration generated id: {}, username: {}, channel: {}", clientId,
-                username, "IPCMQTTConnection");
+                username, "GGMQTTConnection");
         }
 
         if (!login(msg, clientId)) {
@@ -200,7 +200,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
         }
 
         try {
-            LOG.trace("Binding MQTTConnection (channel: {}) to session", "IPCMQTTConnection");
+            LOG.trace("Binding MQTTConnection (channel: {}) to session", "GGMQTTConnection");
             sessionRegistry.bindToSession(this, msg, clientId);
 
             // TODO: Revisit this Keep Alive logic
@@ -209,11 +209,11 @@ final class IPCMQTTConnection implements IMQTTConnection {
 
             //NettyUtils.clientID(channel, clientId);
             this.clientId = clientId;
-            LOG.trace("CONNACK sent, channel: {}", "IPCMQTTConnection");
+            LOG.trace("CONNACK sent, channel: {}", "GGMQTTConnection");
             postOffice.dispatchConnection(msg);
             LOG.trace("dispatch connection: {}", msg.toString());
         } catch (SessionCorruptedException scex) {
-            LOG.warn("MQTT session for client ID {} cannot be created, channel: {}", clientId, "IPCMQTTConnection");
+            LOG.warn("MQTT session for client ID {} cannot be created, channel: {}", clientId, "GGMQTTConnection");
             abortConnection(CONNECTION_REFUSED_SERVER_UNAVAILABLE);
         }
     }
@@ -287,7 +287,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
     //        if (clientID == null || clientID.isEmpty()) {
     //            return;
     //        }
-    //        LOG.info("Notifying connection lost event. CId: {}, channel: {}", clientID, "IPCMQTTConnection");
+    //        LOG.info("Notifying connection lost event. CId: {}, channel: {}", clientID, "GGMQTTConnection");
     //        Session session = sessionRegistry.retrieve(clientID);
     //        if (session.hasWill()) {
     //            postOffice.fireWill(session.getWill());
@@ -322,16 +322,16 @@ final class IPCMQTTConnection implements IMQTTConnection {
 
     void processDisconnect(MqttMessage msg) {
         final String clientID = getClientId();
-        LOG.trace("Start DISCONNECT CId={}, channel: {}", clientID, "IPCMQTTConnection");
+        LOG.trace("Start DISCONNECT CId={}, channel: {}", clientID, "GGMQTTConnection");
         if (!connected) {
             LOG.info("DISCONNECT received on already closed connection, CId={}, channel: {}", clientID,
-                "IPCMQTTConnection");
+                "GGMQTTConnection");
             return;
         }
         sessionRegistry.disconnect(clientID);
         connected = false;
         //channel.close().addListener(FIRE_EXCEPTION_ON_FAILURE);
-        LOG.trace("Processed DISCONNECT CId={}, channel: {}", clientID, "IPCMQTTConnection");
+        LOG.trace("Processed DISCONNECT CId={}, channel: {}", clientID, "GGMQTTConnection");
         String userName = getUsername();
         postOffice.dispatchDisconnection(clientID, userName);
         LOG.trace("dispatch disconnection: clientId={}, userName={}", clientID, userName);
@@ -341,7 +341,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
         final String clientID = getClientId();
         if (!connected) {
             LOG.warn("SUBSCRIBE received on already closed connection, CId={}, channel: {}", clientID,
-                "IPCMQTTConnection");
+                "GGMQTTConnection");
             dropConnection();
             return;
         }
@@ -415,7 +415,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
 
     @Override
     public void sendPublishReceived(int messageID) {
-        //        LOG.trace("sendPubRec invoked on channel: {}", "IPCMQTTConnection");
+        //        LOG.trace("sendPubRec invoked on channel: {}", "GGMQTTConnection");
         //        MqttFixedHeader fixedHeader = new MqttFixedHeader(MqttMessageType.PUBREC, false, AT_MOST_ONCE, false, 0);
         //        MqttPubAckMessage pubRecMessage = new MqttPubAckMessage(fixedHeader, from(messageID));
         //        sendIfWritableElseDrop(pubRecMessage);
@@ -442,13 +442,13 @@ final class IPCMQTTConnection implements IMQTTConnection {
                 topicName);
         }
         //sendIfWritableElseDrop(publishMsg);
-        ipcBridge.publishToIPC(publishMsg);
+        ggBridge.publishToGG(publishMsg);
     }
 
     @Override
     public void sendIfWritableElseDrop(MqttMessage msg) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("OUT {} on channel {}", msg.fixedHeader().messageType(), "IPCMQTTConnection");
+            LOG.debug("OUT {} on channel {}", msg.fixedHeader().messageType(), "GGMQTTConnection");
         }
         //        if (channel.isWritable()) {
         //            ChannelFuture channelFuture;
@@ -464,7 +464,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
     //    public void writabilityChanged() {
     //        //if (channel.isWritable())
     //        {
-    //            LOG.debug("Channel {} is again writable", "IPCMQTTConnection");
+    //            LOG.debug("Channel {} is again writable", "GGMQTTConnection");
     //            final Session session = sessionRegistry.retrieve(getClientId());
     //            session.writabilityChanged();
     //        }
@@ -484,7 +484,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
     }
 
     private void sendPubCompMessage(int messageID) {
-        LOG.trace("Sending PUBCOMP message on channel: {}, messageId: {}", "IPCMQTTConnection", messageID);
+        LOG.trace("Sending PUBCOMP message on channel: {}, messageId: {}", "GGMQTTConnection", messageID);
         //        MqttFixedHeader fixedHeader = new MqttFixedHeader(MqttMessageType.PUBCOMP, false, AT_MOST_ONCE, false, 0);
         //        MqttMessage pubCompMessage = new MqttMessage(fixedHeader, from(messageID));
         //        sendIfWritableElseDrop(pubCompMessage);
@@ -549,7 +549,7 @@ final class IPCMQTTConnection implements IMQTTConnection {
 
     @Override
     public String toString() {
-        return "IPCMQTTConnection";
+        return "GGMQTTConnection";
     }
 
     @Override
