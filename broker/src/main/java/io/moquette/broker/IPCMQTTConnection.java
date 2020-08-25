@@ -48,7 +48,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 
-final class IPCMQTTConnection implements IMQTTConnection {
+public class IPCMQTTConnection implements IMQTTConnection {
 
     private static final Logger LOG = LoggerFactory.getLogger(IPCMQTTConnection.class);
 
@@ -442,7 +442,11 @@ final class IPCMQTTConnection implements IMQTTConnection {
                 topicName);
         }
         //sendIfWritableElseDrop(publishMsg);
-        ipcBridge.publishToIPC(publishMsg);
+        try {
+            ipcBridge.publishToIPC(publishMsg);
+        } catch (IPCBridgeException e) {
+            LOG.error("Error publishing to IPC", e);
+        }
     }
 
     @Override

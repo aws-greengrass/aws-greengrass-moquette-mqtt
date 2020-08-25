@@ -2,6 +2,7 @@
 description = 'Moquette - broker'
 
 dependencies {
+    compile group: 'com.aws.iot', name: 'evergreen-kernel', version: '1.0-SNAPSHOT'
     compile group: 'io.netty', name: 'netty-common', version: nettyVersion
     compile group: 'io.netty', name: 'netty-buffer', version: nettyVersion
     compile group: 'io.netty', name: 'netty-transport', version: nettyVersion
@@ -29,6 +30,7 @@ dependencies {
     compile group: 'org.slf4j', name: 'slf4j-api', version:'1.7.5'
     runtime group: 'org.slf4j', name: 'slf4j-log4j12', version:'1.7.5' // only for local tests
 
+    testCompile group: 'com.aws.iot', name: 'evergreen-kernel', version: '1.0-SNAPSHOT', classifier: 'tests'
     testCompile group: 'org.slf4j', name: 'slf4j-log4j12', version:'1.7.5'
     testCompile group: 'org.fusesource.mqtt-client', name: 'mqtt-client', version:'1.12'
     testCompile group: 'org.eclipse.paho', name: 'org.eclipse.paho.client.mqttv3', version:'1.2.0'

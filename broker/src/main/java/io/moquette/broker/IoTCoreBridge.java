@@ -31,4 +31,9 @@ public class IoTCoreBridge implements IIPCBridge {
 
         // TODO: Publish to IPC
     }
+
+    @Override
+    public void subscribeToIPC(String topic) {
+        //TODO: Subscribe to IPC
+    }
 }

@@ -16,6 +16,7 @@
 
 package io.moquette.broker;
 
+import com.aws.iot.evergreen.builtin.services.pubsub.PubSubIPCAgent;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.config.FileResourceLoader;
 import io.moquette.broker.config.IConfig;
@@ -39,6 +40,7 @@ import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -65,6 +67,9 @@ public class Server {
     private H2Builder h2Builder;
     private SessionRegistry sessions;
     private MQTTBridge mqttBridge;
+
+    @Inject
+    private PubSubIPCAgent pubSubIPCAgent;
 
     public static void main(String[] args) throws IOException {
         final Server server = new Server();
@@ -205,7 +210,7 @@ public class Server {
         LOG.info("Moquette integration has been started successfully in {} ms", startTime);
         initialized = true;
 
-        mqttBridge = new MQTTBridge(connectionFactory);
+        mqttBridge = new MQTTBridge(connectionFactory, pubSubIPCAgent);
         mqttBridge.start();
     }
 

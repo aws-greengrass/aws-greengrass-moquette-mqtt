@@ -1,12 +1,14 @@
 package io.moquette.broker;
 
+import com.aws.iot.evergreen.builtin.services.pubsub.PubSubIPCAgent;
+
 public class MQTTBridge {
 
     private PubSubBridge pubSubBridge;
     private IoTCoreBridge ioTCoreBridge;
 
-    public MQTTBridge(MQTTConnectionFactory mqttConnectionFactory) {
-        this.pubSubBridge = new PubSubBridge(mqttConnectionFactory);
+    public MQTTBridge(MQTTConnectionFactory mqttConnectionFactory, PubSubIPCAgent pubSubIPCAgent) {
+        this.pubSubBridge = new PubSubBridge(mqttConnectionFactory, pubSubIPCAgent);
         this.ioTCoreBridge = new IoTCoreBridge(mqttConnectionFactory);
     }
 
