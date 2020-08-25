@@ -1,12 +1,7 @@
 
-## My Project
+## AWS Greengrass MQTT(Moquette) Broker
 
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+An MQTT complaint broker customized to work with greengrass v2. Source broker code is forked from [Moquette](https://github.com/moquette-io/moquette). 
 
 ## Security
 
