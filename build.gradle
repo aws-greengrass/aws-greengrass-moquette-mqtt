@@ -28,6 +28,7 @@ subprojects {
     maven { url "https://repo.eclipse.org/content/repositories/paho-releases/" }
     maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
     maven { url "https://repo.maven.apache.org/maven2" }
+    maven { url "https://d10d248laylpoq.cloudfront.net" }
   }
 
   apply from: new File(rootDir, 'gradle/java.gradle')
@@ -57,12 +58,22 @@ subprojects {
     from sourceSets.main.allSource
   }
 
+  task fatJar (type : Jar) {
+    manifest {
+      attributes 'Main-Class': 'com.aws.iot.evergreen.MqttBrokerService'
+    }
+    classifier = 'greengrass-mqtt-broker'
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+  }
+
   // summarize artifacts
   artifacts {
     archives jar
     archives sourceJar
     archives javadocJar
     archives packageTests
+    archives fatJar
   }
 
   dependencies {

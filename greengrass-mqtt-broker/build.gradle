@@ -1,0 +1,3 @@
+
+description = 'Greengrass - MQTT - broker'
+apply plugin: 'java'
