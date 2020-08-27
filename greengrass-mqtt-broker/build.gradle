@@ -2,9 +2,24 @@
 description = 'Greengrass - MQTT - broker'
 apply plugin: 'java'
 
+repositories {
+  maven { url "https://d10d248laylpoq.cloudfront.net" }
+}
+
 dependencies {
-  compileOnly 'com.aws.iot:evergreen-kernel:1.0-SNAPSHOT'
   compile project(':moquette-broker')
+
+  testImplementation('org.junit.jupiter:junit-jupiter-api:5.6.2')
+  testRuntime('org.junit.jupiter:junit-jupiter-engine:5.6.2')
+
+  compileOnly group: 'com.aws.iot', name: 'evergreen-kernel', version:'1.0-SNAPSHOT'
+  testCompile group: 'com.aws.iot', name: 'evergreen-kernel', version:'1.0-SNAPSHOT'
+  testCompile group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.2.4'
+  testCompile group: 'com.aws.iot', name: 'evergreen-kernel', version:'1.0-SNAPSHOT', classifier: 'tests'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 task fatJar (type : Jar) {

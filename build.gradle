@@ -28,7 +28,6 @@ subprojects {
     maven { url "https://repo.eclipse.org/content/repositories/paho-releases/" }
     maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
     maven { url "https://repo.maven.apache.org/maven2" }
-    maven { url "https://d10d248laylpoq.cloudfront.net" }
   }
 
   apply from: new File(rootDir, 'gradle/java.gradle')
