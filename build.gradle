@@ -58,26 +58,16 @@ subprojects {
     from sourceSets.main.allSource
   }
 
-  task fatJar (type : Jar) {
-    manifest {
-      attributes 'Main-Class': 'com.aws.iot.evergreen.MqttBrokerService'
-    }
-    classifier = 'greengrass-mqtt-broker'
-    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
-    with jar
-  }
-
   // summarize artifacts
   artifacts {
     archives jar
     archives sourceJar
     archives javadocJar
     archives packageTests
-    archives fatJar
   }
 
   dependencies {
-    compile group: 'org.slf4j', name: 'slf4j-api', version:'1.7.5'
+    compileOnly group: 'org.slf4j', name: 'slf4j-api', version:'1.7.5'
 
     testCompile group: 'junit', name: 'junit', version:'4.8.2'
     testCompile group: 'org.slf4j', name: 'slf4j-log4j12', version:'1.7.5'
