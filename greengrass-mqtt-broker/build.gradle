@@ -8,7 +8,8 @@ dependencies {
 }
 
 task fatJar (type : Jar) {
-  classifier = 'greengrass-mqtt-broker-fat-jar'
+  classifier = 'fat-jar'
+  baseName = 'aws.greengrass.mqtt.broker'
   from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
   with jar
 }
