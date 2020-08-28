@@ -39,7 +39,7 @@ jobs:
           name: Coverage Report
           path: greengrass-mqtt-broker/build/jacoco-report
       - name: Convert Jacoco unit test report to Cobertura
-        run: python3 .github/scripts/cover2cover.py greengrass-mqtt-broker/build/jacoco-report/test/jacocoTestReport.xml > target/jacoco-report/cobertura.xml
+        run: python3 .github/scripts/cover2cover.py greengrass-mqtt-broker/build/jacoco-report/test/jacocoTestReport.xml > greengrass-mqtt-broker/build/jacoco-report/test/cobertura.xml
       - name: cobertura-report-unit-test
         uses: shaguptashaikh/cobertura-action@master
         continue-on-error: true
@@ -47,7 +47,7 @@ jobs:
           # The GITHUB_TOKEN for this repo
           repo_token: ${{ github.token }}
           # Path to the cobertura file.
-          path: target/jacoco-report/cobertura.xml
+          path: greengrass-mqtt-broker/build/jacoco-report/test/cobertura.xml
           # If files with 100% should be skipped from report.
           skip_covered: false
           # Minimum allowed coverage percentage as an integer.
