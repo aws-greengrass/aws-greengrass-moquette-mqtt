@@ -7,3 +7,20 @@ targetCompatibility = 1.8
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
+
+jacoco {
+  reportsDir = file("$buildDir/jacoco-report")
+}
+
+test {
+  finalizedBy jacocoTestReport // report is always generated after tests run
+}
+
+jacocoTestReport {
+  dependsOn test // tests are required to run before generating the report
+  reports {
+    xml.enabled true
+    csv.enabled false
+    html.destination file("$buildDir/jacoco-report/jacocoHtml")
+  }
+}
