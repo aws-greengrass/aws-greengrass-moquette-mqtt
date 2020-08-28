@@ -1,0 +1,20 @@
+
+description = 'Greengrass - MQTT - broker'
+apply plugin: 'java'
+
+dependencies {
+  compileOnly 'com.aws.iot:evergreen-kernel:1.0-SNAPSHOT'
+  compile project(':moquette-broker')
+}
+
+task fatJar (type : Jar) {
+  classifier = 'fat-jar'
+  baseName = 'aws.greengrass.mqtt.broker'
+  from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+  with jar
+}
+
+// summarize artifacts
+artifacts {
+  archives fatJar
+}
