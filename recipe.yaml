@@ -1,10 +1,10 @@
 ---
 templateVersion: '2020-01-25'
-componentName: aws.greengrass.mqtt.broker
+componentName: aws.greengrass.mqtt
 description: AWS Greengrass MQTT Broker
 publisher: AWS
 version: '0.0.0'
 componentType: plugin
 manifests:
-    - artifacts:
-          - uri: s3://gg-dev-artifacts/$componentName/$platform/$version/aws.greengrass.mqtt.broker.jar
+  - artifacts:
+      - uri: s3://gg-dev-artifacts/$componentName/$version/aws.greengrass.mqtt.jar
