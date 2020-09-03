@@ -80,8 +80,6 @@ jobs:
       - name: Package with Gradle
         run: ./gradlew build -x test
       - run: sudo apt-get install -y awscli
-      - name: Upload to S3
-        run: aws s3 cp greengrass-mqtt-broker/build/libs/aws.greengrass.mqtt.broker-0.12.1-fat-jar.jar s3://gg-evergreen-releases/${{github.repository}}/${{github.ref}}/aws.greengrass.mqtt-${{github.sha}}.jar
       - run: mkdir -p target/artifacts && cp greengrass-mqtt-broker/build/libs/aws.greengrass.mqtt.broker-0.12.1-fat-jar.jar  target/artifacts/aws.greengrass.mqtt.jar
       - uses: ./.github/actions/aws-greengrass-component-upload-action
         name: Upload to GCS
