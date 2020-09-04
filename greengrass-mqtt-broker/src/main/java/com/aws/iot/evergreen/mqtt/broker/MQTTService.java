@@ -51,7 +51,18 @@ public class MQTTService extends EvergreenService {
     public IConfig getDefaultConfig() {
         // TODO: Enable SSL, get certs from DCM
         IConfig defaultConfig = new MemoryConfig(new Properties());
-        defaultConfig.setProperty(BrokerConstants.PORT_PROPERTY_NAME, "8883");
+
+        defaultConfig.setProperty(BrokerConstants.HOST_PROPERTY_NAME, "127.0.0.1");
+        defaultConfig.setProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME, "8883");
+
+        defaultConfig.setProperty(BrokerConstants.JKS_PATH_PROPERTY_NAME, "serverstore.p12");
+        defaultConfig.setProperty(BrokerConstants.KEY_STORE_TYPE, "pkcs12");
+        defaultConfig.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
+        defaultConfig.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
+
+        defaultConfig.setProperty(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, "true");
+        defaultConfig.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
+
         return defaultConfig;
     }
 }
