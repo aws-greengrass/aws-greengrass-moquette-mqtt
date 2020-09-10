@@ -58,10 +58,9 @@ public class MQTTBrokerKeyStore {
      */
     public void writeKeyStoreToDisk(KeyStore keyStore) throws
         IOException, CertificateException, NoSuchAlgorithmException, KeyStoreException {
-        FileOutputStream outputStream = new FileOutputStream(getBrokerKeyStorePath());
-        keyStore.store(outputStream, DEFAULT_KEYSTORE_PASSWORD);
-        outputStream.flush();
-        outputStream.close();
+        try (FileOutputStream outputStream = new FileOutputStream(getBrokerKeyStorePath())) {
+            keyStore.store(outputStream, DEFAULT_KEYSTORE_PASSWORD);
+        }
     }
 
     /**
@@ -74,10 +73,11 @@ public class MQTTBrokerKeyStore {
 
     private KeyStore loadBrokerKeyStore() throws
         KeyStoreException, IOException, CertificateException, NoSuchAlgorithmException {
-        FileInputStream is = new FileInputStream(getBrokerKeyStorePath());
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
-        keystore.load(is, DEFAULT_KEYSTORE_PASSWORD);
-        return keystore;
+        try (FileInputStream is = new FileInputStream(getBrokerKeyStorePath())) {
+            keystore.load(is, DEFAULT_KEYSTORE_PASSWORD);
+            return keystore;
+        }
     }
 
     private KeyStore createDefaultBrokerKeyStore() throws KeyStoreException {
