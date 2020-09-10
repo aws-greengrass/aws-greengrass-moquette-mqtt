@@ -38,6 +38,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import org.bouncycastle.operator.OperatorCreationException;
@@ -171,7 +172,14 @@ public class MQTTService extends EvergreenService {
 
     private KeyStore importClientCertsIntoKeyStore(Map<String, String> clientCerts)
         throws IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException {
-        // TODO: check if cert alias exists
+        // Remove deleted client certs from key store
+        for (String alias : Collections.list(brokerKeyStore.aliases())) {
+            if (!alias.equals(BROKER_KEY_ALIAS) && !clientCerts.containsKey(alias)) {
+                brokerKeyStore.deleteEntry(alias);
+            }
+        }
+
+        // Add or update client certs in key store
         for (Map.Entry<String, String> entry : clientCerts.entrySet()) {
             X509Certificate cert = pemToX509Certificate(entry.getValue());
             brokerKeyStore.setCertificateEntry(entry.getKey(), cert);
