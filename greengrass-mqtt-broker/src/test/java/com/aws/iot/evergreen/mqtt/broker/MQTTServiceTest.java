@@ -10,6 +10,7 @@ import com.aws.iot.evergreen.testcommons.testutilities.EGExtension;
 import com.aws.iot.evergreen.testcommons.testutilities.EGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -42,6 +43,7 @@ public class MQTTServiceTest extends EGServiceTestUtil {
         kernel.shutdown();
     }
 
+    @Disabled
     @Test
     void GIVEN_Evergreen_with_broker_WHEN_start_kernel_THEN_broker_starts_on_port_8883()
         throws InterruptedException, IOException {
@@ -61,4 +63,6 @@ public class MQTTServiceTest extends EGServiceTestUtil {
         Socket socket = new Socket("localhost", 8883);
         socket.close();
     }
+
+    // TODO: Add tests for key store
 }
