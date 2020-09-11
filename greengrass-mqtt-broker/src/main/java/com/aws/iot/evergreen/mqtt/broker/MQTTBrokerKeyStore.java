@@ -4,102 +4,145 @@
  */
 
 package com.aws.iot.evergreen.mqtt.broker;
+import com.aws.iot.evergreen.dcm.certificate.CertificateRequestGenerator;
 
-import java.io.FileInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
-import lombok.AccessLevel;
 import lombok.Getter;
+import org.bouncycastle.operator.OperatorCreationException;
 
 public class MQTTBrokerKeyStore {
+    private static final String DEFAULT_BROKER_CN = "Greengrass MQTT";
+    private static final String KEYSTORE_FILE_NAME = "keystore.jks";
+    private static final String BROKER_KEY_ALIAS = "pk";
 
-    private static final int RSA_KEY_LENGTH = 2048;
-    private static final String RSA_KEY_INSTANCE = "RSA";
-    public static final String DEFAULT_KEYSTORE_PASSWORD_STRING = "";
-    public static final char[] DEFAULT_KEYSTORE_PASSWORD = DEFAULT_KEYSTORE_PASSWORD_STRING.toCharArray();
+    private final Path rootPath;
+    @Getter private final String jksPath;
+    @Getter private final String jksPassword;
+    private KeyStore brokerKeyStore;
+    private KeyPair brokerKeyPair;
 
-    @Getter(AccessLevel.PACKAGE)
-    private static KeyStore brokerKeyStore;
-    private static KeyPair brokerKeyPair;
-
-    // getter
-    public static KeyPair getBrokerKeyPair() {
-        return brokerKeyPair;
+    public MQTTBrokerKeyStore(Path rootDir) {
+        this.rootPath = rootDir;
+        this.jksPath = rootDir.resolve(KEYSTORE_FILE_NAME).toString();
+        this.jksPassword = generateRandomPassword(16);
     }
 
-    /**
-     *
-     * @return broker key store
-     * @throws KeyStoreException exception in creating key store
-     */
-    public KeyStore getKeyStore() throws KeyStoreException {
+    private static String generateRandomPassword(int length) {
+        SecureRandom secureRandom = new SecureRandom();
+        return secureRandom.ints('!', 'z' + 1)
+            .limit(length)
+            .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+            .toString();
+    }
+
+    public void load() throws KeyStoreException {
+        // Initialize new keystore rather than loading an old one
         try {
-            brokerKeyStore = loadBrokerKeyStore();
-        } catch (KeyStoreException | IOException | CertificateException | NoSuchAlgorithmException e) {
-            brokerKeyStore = createDefaultBrokerKeyStore();
-        }
-        return brokerKeyStore;
-    }
-
-    /**
-     *
-     * @param keyStore keystore to write to disk
-     * @throws IOException if there was an I/O problem with data
-     * @throws CertificateException  if any of the certificates included in the keystore data could not be stored
-     * @throws NoSuchAlgorithmException if the appropriate data integrity algorithm could not be found
-     * @throws KeyStoreException  if the keystore has not been initialized (loaded)
-     */
-    public void writeKeyStoreToDisk(KeyStore keyStore) throws
-        IOException, CertificateException, NoSuchAlgorithmException, KeyStoreException {
-        try (FileOutputStream outputStream = new FileOutputStream(getBrokerKeyStorePath())) {
-            keyStore.store(outputStream, DEFAULT_KEYSTORE_PASSWORD);
-        }
-    }
-
-    /**
-     *
-     * @return path to broker key store
-     */
-    public String getBrokerKeyStorePath() {
-        return "work/" + MQTTService.SERVICE_NAME + "/serverstore.jks";
-    }
-
-    private KeyStore loadBrokerKeyStore() throws
-        KeyStoreException, IOException, CertificateException, NoSuchAlgorithmException {
-        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
-        try (FileInputStream is = new FileInputStream(getBrokerKeyStorePath())) {
-            keystore.load(is, DEFAULT_KEYSTORE_PASSWORD);
-            return keystore;
-        }
-    }
-
-    private KeyStore createDefaultBrokerKeyStore() throws KeyStoreException {
-        // Generate Broker keypair
-        try {
-            brokerKeyPair = newRSAKeyPair();
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+            kpg.initialize(2048);
+            brokerKeyPair = kpg.generateKeyPair();
         } catch (NoSuchAlgorithmException e) {
             throw new KeyStoreException("unable to generate keypair for broker key store", e);
         }
 
         KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
         try {
-            ks.load(null, DEFAULT_KEYSTORE_PASSWORD);
+            ks.load(null, jksPassword.toCharArray());
+            brokerKeyStore = ks;
         } catch (IOException | NoSuchAlgorithmException | CertificateException e) {
             throw new KeyStoreException("unable to load broker keystore", e);
         }
-        return ks;
     }
 
-    private static KeyPair newRSAKeyPair() throws NoSuchAlgorithmException {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance(RSA_KEY_INSTANCE);
-        kpg.initialize(RSA_KEY_LENGTH);
-        return kpg.generateKeyPair();
+    public String getCsr() throws KeyStoreException {
+        try {
+            return CertificateRequestGenerator.createCSR(brokerKeyPair,
+                DEFAULT_BROKER_CN,
+                null,
+                new ArrayList<>(Arrays.asList("localhost")));
+        } catch (IOException | OperatorCreationException e) {
+            throw new KeyStoreException("unable to generate CSR from keypair", e);
+        }
+    }
+
+    public void updateServerCertificate(X509Certificate certificate) throws KeyStoreException {
+        Certificate[] certChain = {certificate};
+        brokerKeyStore.setKeyEntry(BROKER_KEY_ALIAS,
+            brokerKeyPair.getPrivate(),
+            jksPassword.toCharArray(),
+            certChain);
+
+        try {
+            commit();
+        } catch (IOException | CertificateException | NoSuchAlgorithmException e) {
+            // TODO - properly handle this
+            e.printStackTrace();
+        }
+    }
+
+    public void updateCertificates(Map<String, String> deviceCerts, List<String> caCerts)
+        throws KeyStoreException, IOException, CertificateException {
+        for (String alias : Collections.list(brokerKeyStore.aliases())) {
+            if (brokerKeyStore.isCertificateEntry(alias) && !deviceCerts.containsKey(alias)) {
+                brokerKeyStore.deleteEntry(alias);
+            }
+        }
+
+        // Add or update client certs in key store
+        for (Map.Entry<String, String> entry : deviceCerts.entrySet()) {
+            X509Certificate cert = pemToX509Certificate(entry.getValue());
+            brokerKeyStore.setCertificateEntry(entry.getKey(), cert);
+        }
+
+        // Update CA certs
+        for (int i = 0; i < caCerts.size(); i++) {
+            brokerKeyStore.setCertificateEntry("CA" + i, pemToX509Certificate(caCerts.get(i)));
+        }
+
+        try {
+            commit();
+        } catch (IOException | CertificateException | NoSuchAlgorithmException e) {
+            // TODO - properly handle this
+            e.printStackTrace();
+        }
+    }
+
+    private void commit() throws IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException {
+        Files.createDirectories(rootPath);
+        try (FileOutputStream outputStream = new FileOutputStream(jksPath)) {
+            brokerKeyStore.store(outputStream, jksPassword.toCharArray());
+        }
+    }
+
+    private X509Certificate pemToX509Certificate(String certPem) throws IOException, CertificateException {
+        byte[] certBytes = certPem.getBytes(StandardCharsets.UTF_8);
+        CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+        X509Certificate cert;
+        try (InputStream certStream = new ByteArrayInputStream(certBytes)) {
+            cert = (X509Certificate) certFactory.generateCertificate(certStream);
+        }
+        return cert;
     }
 }
