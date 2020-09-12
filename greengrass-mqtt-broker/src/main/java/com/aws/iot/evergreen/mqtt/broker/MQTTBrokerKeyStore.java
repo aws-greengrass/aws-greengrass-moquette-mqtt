@@ -43,6 +43,10 @@ public class MQTTBrokerKeyStore {
     private KeyStore brokerKeyStore;
     private KeyPair brokerKeyPair;
 
+    /**
+     * MQTTBrokerKeyStore constructor
+     * @param rootDir Directory to save KeyStore artifacts.
+     */
     public MQTTBrokerKeyStore(Path rootDir) {
         this.rootPath = rootDir;
         this.jksPath = rootDir.resolve(KEYSTORE_FILE_NAME).toString();
@@ -57,7 +61,11 @@ public class MQTTBrokerKeyStore {
             .toString();
     }
 
-    public void load() throws KeyStoreException {
+    /**
+     * Initializes the MQTTBrokerKeyStore. Must be called prior to using.
+     * @throws KeyStoreException Unable to initialize KeyStore.
+     */
+    public void initialize() throws KeyStoreException {
         // Initialize new keystore rather than loading an old one
         try {
             KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
@@ -76,17 +84,24 @@ public class MQTTBrokerKeyStore {
         }
     }
 
-    public String getCsr() throws KeyStoreException {
-        try {
-            return CertificateRequestGenerator.createCSR(brokerKeyPair,
-                DEFAULT_BROKER_CN,
-                null,
-                new ArrayList<>(Arrays.asList("localhost")));
-        } catch (IOException | OperatorCreationException e) {
-            throw new KeyStoreException("unable to generate CSR from keypair", e);
-        }
+    /**
+     * Generate CSR from KeyStore private key.
+     * @return PEM encoded CSR string
+     * @throws IOException IOException
+     * @throws OperatorCreationException OperatorCreationException
+     */
+    public String getCsr() throws IOException, OperatorCreationException {
+        return CertificateRequestGenerator.createCSR(brokerKeyPair,
+            DEFAULT_BROKER_CN,
+            null,
+            new ArrayList<>(Arrays.asList("localhost")));
     }
 
+    /**
+     * Update KeyStore key certificate.
+     * @param certificate Updated certificate
+     * @throws KeyStoreException If unable to set key entry.
+     */
     public void updateServerCertificate(X509Certificate certificate) throws KeyStoreException {
         Certificate[] certChain = {certificate};
         brokerKeyStore.setKeyEntry(BROKER_KEY_ALIAS,
@@ -102,8 +117,17 @@ public class MQTTBrokerKeyStore {
         }
     }
 
+    /**
+     * Update KeyStore with the given CA and device certificates.
+     * @param deviceCerts Map of device certificates
+     * @param caCerts     List of CA certificates
+     * @throws KeyStoreException    If unable to set key entries.
+     * @throws IOException          If unable to parse certificates.
+     * @throws CertificateException If unable to parse certificates.
+     */
     public void updateCertificates(Map<String, String> deviceCerts, List<String> caCerts)
         throws KeyStoreException, IOException, CertificateException {
+        // Remove all existing CA certificates and device certificates not included in deviceCerts
         for (String alias : Collections.list(brokerKeyStore.aliases())) {
             if (brokerKeyStore.isCertificateEntry(alias) && !deviceCerts.containsKey(alias)) {
                 brokerKeyStore.deleteEntry(alias);
@@ -116,7 +140,7 @@ public class MQTTBrokerKeyStore {
             brokerKeyStore.setCertificateEntry(entry.getKey(), cert);
         }
 
-        // Update CA certs
+        // Add new CA certs
         for (int i = 0; i < caCerts.size(); i++) {
             brokerKeyStore.setCertificateEntry("CA" + i, pemToX509Certificate(caCerts.get(i)));
         }

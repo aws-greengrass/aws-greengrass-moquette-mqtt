@@ -19,6 +19,7 @@ import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
+import org.bouncycastle.operator.OperatorCreationException;
 
 import javax.inject.Inject;
 
@@ -66,17 +67,42 @@ public class MQTTService extends EvergreenService {
     protected void install() throws InterruptedException {
         mqttBrokerKeyStore = new MQTTBrokerKeyStore(kernel.getWorkPath().resolve(SERVICE_NAME));
         try {
-            mqttBrokerKeyStore.load();
+            mqttBrokerKeyStore.initialize();
         } catch (KeyStoreException e) {
             logger.atError().log("unable to create broker keystore");
             serviceErrored(e);
         }
+    }
 
+    private synchronized void updateServerCertificate(X509Certificate cert) {
+        try {
+            mqttBrokerKeyStore.updateServerCertificate(cert);
+        } catch (KeyStoreException e) {
+            logger.atError().cause(e).log("failed to update MQTT server certificate");
+        }
+        restartMqttServer();
+    }
+
+    private synchronized void updateCertificates(WhatHappened what, Topic topic) {
+        logger.atInfo().kv("topic", topic.getName()).log("received config update");
+        Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
+        List<String> caCerts = (List<String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
+        Map<String, String> deviceCerts = (Map<String, String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).toPOJO();
+        try {
+            mqttBrokerKeyStore.updateCertificates(deviceCerts, caCerts);
+        } catch (KeyStoreException | IOException | CertificateException e) {
+            logger.atError().cause(e).log("failed to update device and CA certificates");
+        }
+        restartMqttServer();
+    }
+
+    @Override
+    public synchronized void startup() {
         // Subscribe to DCM certificate updates
         try {
             String brokerCsr = mqttBrokerKeyStore.getCsr();
             certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
-        } catch (KeyStoreException | CsrProcessingException e) {
+        } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
             logger.atError().log("unable to generate broker certificate");
             serviceErrored(e);
         }
@@ -87,32 +113,7 @@ public class MQTTService extends EvergreenService {
             .subscribe(this::updateCertificates);
         dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC)
             .subscribe(this::updateCertificates);
-    }
 
-    private void updateServerCertificate(X509Certificate cert) {
-        try {
-            mqttBrokerKeyStore.updateServerCertificate(cert);
-        } catch (KeyStoreException e) {
-            e.printStackTrace();
-        }
-        restartMqttServer();
-    }
-
-    private void updateCertificates(WhatHappened what, Topic topic) {
-        logger.atInfo().kv("topic", topic.getName()).log("received config update");
-        Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
-        List<String> caCerts = (List<String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
-        Map<String, String> deviceCerts = (Map<String, String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).toPOJO();
-        try {
-            mqttBrokerKeyStore.updateCertificates(deviceCerts, caCerts);
-        } catch (KeyStoreException | IOException | CertificateException e) {
-            e.printStackTrace();
-        }
-        restartMqttServer();
-    }
-
-    @Override
-    public synchronized void startup() {
         try {
             mqttBroker.startServer(getDefaultConfig());
             serverRunning = true;
