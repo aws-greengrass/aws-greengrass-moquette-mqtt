@@ -10,5 +10,5 @@ Manifests:
       - URI: s3://gg-dev-artifacts/$componentName/$version/aws.greengrass.mqtt.jar
     Dependencies:
         aws.greengrass.CertificateManager:
-            VersionRequirement: >=0.0.0
+            VersionRequirement: '>=0.0.0'
             DependencyType: HARD
