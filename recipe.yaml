@@ -1,10 +1,14 @@
 ---
-templateVersion: '2020-01-25'
-componentName: aws.greengrass.mqtt
-description: AWS Greengrass MQTT Broker
-publisher: AWS
-version: '0.0.0'
-componentType: plugin
-manifests:
-  - artifacts:
-      - uri: s3://gg-dev-artifacts/$componentName/$version/aws.greengrass.mqtt.jar
+RecipeFormatVersion: '2020-01-25'
+ComponentName: aws.greengrass.Mqtt
+ComponentDescription: AWS Greengrass MQTT
+ComponentPublisher: AWS
+ComponentVersion: 0.0.0
+ComponentType: aws.greengrass.plugin
+Manifests:
+  - Artifacts:
+      - URI: s3://gg-dev-artifacts/$componentName/$version/aws.greengrass.mqtt.jar
+    Dependencies:
+        aws.greengrass.CertificateManager:
+            VersionRequirement: '>=0.0.0'
+            DependencyType: HARD
