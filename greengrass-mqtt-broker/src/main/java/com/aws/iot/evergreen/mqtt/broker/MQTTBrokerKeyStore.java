@@ -4,7 +4,7 @@
  */
 
 package com.aws.iot.evergreen.mqtt.broker;
-import com.aws.iot.evergreen.dcm.certificate.CertificateRequestGenerator;
+import com.aws.iot.evergreen.certificatemanager.certificate.CertificateRequestGenerator;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;

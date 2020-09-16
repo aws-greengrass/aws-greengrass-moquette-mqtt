@@ -3,17 +3,19 @@
 
 package com.aws.iot.evergreen.mqtt.broker;
 
+import com.aws.iot.evergreen.certificatemanager.CertificateManager;
 import com.aws.iot.evergreen.dependency.State;
 import com.aws.iot.evergreen.kernel.EvergreenService;
 import com.aws.iot.evergreen.kernel.Kernel;
+import com.aws.iot.evergreen.mqtt.MqttClient;
 import com.aws.iot.evergreen.testcommons.testutilities.EGExtension;
 import com.aws.iot.evergreen.testcommons.testutilities.EGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
@@ -33,9 +35,13 @@ public class MQTTServiceTest extends EGServiceTestUtil {
 
     private Kernel kernel;
 
+    @Mock
+    CertificateManager mockCertificateManager;
+
     @BeforeEach
     void setup() {
         kernel = new Kernel();
+        kernel.getContext().put(CertificateManager.class, mockCertificateManager);
     }
 
     @AfterEach
@@ -43,7 +49,6 @@ public class MQTTServiceTest extends EGServiceTestUtil {
         kernel.shutdown();
     }
 
-    @Disabled
     @Test
     void GIVEN_Evergreen_with_broker_WHEN_start_kernel_THEN_broker_starts_on_port_8883()
         throws InterruptedException, IOException {
@@ -63,6 +68,4 @@ public class MQTTServiceTest extends EGServiceTestUtil {
         Socket socket = new Socket("localhost", 8883);
         socket.close();
     }
-
-    // TODO: Add tests for key store
 }

@@ -1,10 +1,10 @@
 ---
 services:
-    aws.greengrass.mqtt:
+    aws.greengrass.Mqtt:
         parameters:
     main:
         lifecycle:
             install:
                 all: echo All installed
         dependencies:
-            - aws.greengrass.mqtt
+            - aws.greengrass.Mqtt

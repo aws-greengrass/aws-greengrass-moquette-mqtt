@@ -7,9 +7,9 @@ package com.aws.iot.evergreen.mqtt.broker;
 
 import com.aws.iot.evergreen.config.Topic;
 import com.aws.iot.evergreen.config.WhatHappened;
-import com.aws.iot.evergreen.dcm.CertificateManager;
+import com.aws.iot.evergreen.certificatemanager.CertificateManager;
 import com.aws.iot.evergreen.config.Topics;
-import com.aws.iot.evergreen.dcm.certificate.CsrProcessingException;
+import com.aws.iot.evergreen.certificatemanager.certificate.CsrProcessingException;
 import com.aws.iot.evergreen.dependency.ImplementsService;
 import com.aws.iot.evergreen.dependency.State;
 import com.aws.iot.evergreen.kernel.EvergreenService;
@@ -33,8 +33,8 @@ import java.util.Properties;
 
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends EvergreenService {
-    public static final String SERVICE_NAME = "aws.greengrass.mqtt";
-    public static final String DCM_SERVICE_NAME = "aws.greengrass.certificate.manager";
+    public static final String SERVICE_NAME = "aws.greengrass.Mqtt";
+    public static final String DCM_SERVICE_NAME = "aws.greengrass.CertificateManager";
 
     // Config Keys
     private static final String RUNTIME_CONFIG_KEY = "runtime";
