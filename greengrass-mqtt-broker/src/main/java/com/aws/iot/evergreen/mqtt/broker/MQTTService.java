@@ -134,7 +134,7 @@ public class MQTTService extends EvergreenService {
         if (serverRunning) {
             try {
                 mqttBroker.stopServer();
-                mqttBroker.startServer();
+                mqttBroker.startServer(getDefaultConfig());
             } catch (IOException e) {
                 // TODO - handle this more gracefully
                 logger.atError().log("unable to restart broker");
