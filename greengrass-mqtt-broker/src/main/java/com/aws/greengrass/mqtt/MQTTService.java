@@ -3,25 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.iot.evergreen.mqtt.broker;
+package com.aws.greengrass.mqtt;
 
-import com.aws.iot.evergreen.config.Topic;
-import com.aws.iot.evergreen.config.WhatHappened;
-import com.aws.iot.evergreen.certificatemanager.CertificateManager;
-import com.aws.iot.evergreen.config.Topics;
-import com.aws.iot.evergreen.certificatemanager.certificate.CsrProcessingException;
-import com.aws.iot.evergreen.dependency.ImplementsService;
-import com.aws.iot.evergreen.dependency.State;
-import com.aws.iot.evergreen.kernel.EvergreenService;
-
-import com.aws.iot.evergreen.kernel.Kernel;
+import com.aws.greengrass.certificatemanager.CertificateManager;
+import com.aws.greengrass.certificatemanager.certificate.CsrProcessingException;
+import com.aws.greengrass.config.Topic;
+import com.aws.greengrass.config.Topics;
+import com.aws.greengrass.config.WhatHappened;
+import com.aws.greengrass.dependency.ImplementsService;
+import com.aws.greengrass.dependency.State;
+import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.lifecyclemanager.PluginService;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
 import org.bouncycastle.operator.OperatorCreationException;
-
-import javax.inject.Inject;
 
 import java.io.IOException;
 import java.security.KeyStoreException;
@@ -30,9 +27,10 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import javax.inject.Inject;
 
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
-public class MQTTService extends EvergreenService {
+public class MQTTService extends PluginService {
     public static final String SERVICE_NAME = "aws.greengrass.Mqtt";
     public static final String DCM_SERVICE_NAME = "aws.greengrass.CertificateManager";
 

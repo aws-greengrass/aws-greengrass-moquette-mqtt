@@ -1,15 +1,17 @@
-/* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-package com.aws.iot.evergreen.mqtt.broker;
+package com.aws.greengrass.mqttclient;
 
-import com.aws.iot.evergreen.certificatemanager.CertificateManager;
-import com.aws.iot.evergreen.dependency.State;
-import com.aws.iot.evergreen.kernel.EvergreenService;
-import com.aws.iot.evergreen.kernel.Kernel;
-import com.aws.iot.evergreen.mqtt.MqttClient;
-import com.aws.iot.evergreen.testcommons.testutilities.EGExtension;
-import com.aws.iot.evergreen.testcommons.testutilities.EGServiceTestUtil;
+import com.aws.greengrass.certificatemanager.CertificateManager;
+import com.aws.greengrass.dependency.State;
+import com.aws.greengrass.lifecyclemanager.GreengrassService;
+import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.mqtt.MQTTService;
+import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,8 +28,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith({MockitoExtension.class, EGExtension.class})
-public class MQTTServiceTest extends EGServiceTestUtil {
+@ExtendWith({MockitoExtension.class, GGExtension.class})
+public class MQTTServiceTest extends GGServiceTestUtil {
     private static final long TEST_TIME_OUT_SEC = 30L;
 
     @TempDir
@@ -55,9 +57,8 @@ public class MQTTServiceTest extends EGServiceTestUtil {
         CountDownLatch serviceRunning = new CountDownLatch(1);
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
             getClass().getResource("config.yaml").toString());
-        kernel.getContext().addGlobalStateChangeListener((EvergreenService service, State was, State newState) -> {
-            if (service.getName().equals(MQTTService.SERVICE_NAME) && service.getState()
-                .equals(State.RUNNING)) {
+        kernel.getContext().addGlobalStateChangeListener((GreengrassService service, State was, State newState) -> {
+            if (service.getName().equals(MQTTService.SERVICE_NAME) && service.getState().equals(State.RUNNING)) {
                 serviceRunning.countDown();
             }
         });
