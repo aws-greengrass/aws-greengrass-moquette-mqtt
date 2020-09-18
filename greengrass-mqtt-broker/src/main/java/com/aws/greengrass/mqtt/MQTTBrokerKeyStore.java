@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.iot.evergreen.mqtt.broker;
-import com.aws.iot.evergreen.certificatemanager.certificate.CertificateRequestGenerator;
+package com.aws.greengrass.mqtt;
+import com.aws.greengrass.certificatemanager.certificate.CertificateRequestGenerator;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileOutputStream;

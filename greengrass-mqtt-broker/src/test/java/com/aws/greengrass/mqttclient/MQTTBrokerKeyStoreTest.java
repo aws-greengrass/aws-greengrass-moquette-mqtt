@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.iot.evergreen.mqtt.broker;
+package com.aws.greengrass.mqttclient;
 
-import com.aws.iot.evergreen.testcommons.testutilities.EGExtension;
-import java.nio.file.Path;
-
+import com.aws.greengrass.mqtt.MQTTBrokerKeyStore;
+import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +14,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith({MockitoExtension.class, EGExtension.class})
+import java.nio.file.Path;
+
+@ExtendWith({MockitoExtension.class, GGExtension.class})
 public class MQTTBrokerKeyStoreTest {
     private static final String IOT_CERT = "-----BEGIN CERTIFICATE-----\n" +
         "MIIDWTCCAkGgAwIBAgIUcMgL9j0BQ6HqadaNuHh/x1WRpd0wDQYJKoZIhvcNAQEL\n" +

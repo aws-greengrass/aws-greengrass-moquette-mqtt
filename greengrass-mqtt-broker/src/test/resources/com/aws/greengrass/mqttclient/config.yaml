@@ -1,7 +1,9 @@
 ---
 services:
     aws.greengrass.Mqtt:
-        parameters:
+        parameters: {}
+        dependencies:
+            - aws.greengrass.CertificateManager
     main:
         lifecycle:
             install:

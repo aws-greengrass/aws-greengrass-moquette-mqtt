@@ -25,7 +25,7 @@ jobs:
       - run: rm -rf /tmp/*
         continue-on-error: true
       - name: Build with Gradle
-        run: ./gradlew clean test
+        run: ./gradlew clean test --refresh-dependencies
       - name: Upload Failed Test Report
         uses: actions/upload-artifact@v1.0.0
         if: failure()
@@ -80,7 +80,7 @@ jobs:
       - name: Package with Gradle
         run: ./gradlew build -x test
       - run: sudo apt-get install -y awscli
-      - run: mkdir -p target/artifacts && cp greengrass-mqtt-broker/build/libs/aws.greengrass.mqtt.broker-0.12.1-fat-jar.jar  target/artifacts/aws.greengrass.mqtt.jar
+      - run: mkdir -p target/artifacts && cp greengrass-mqtt-broker/build/libs/aws.greengrass.mqtt.broker-0.12.1-fat-jar.jar  target/artifacts/aws.greengrass.Mqtt.jar
       - uses: ./.github/actions/aws-greengrass-component-upload-action
         name: Upload to GCS
         env:

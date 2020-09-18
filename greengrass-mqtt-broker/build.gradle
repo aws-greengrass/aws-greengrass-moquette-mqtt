@@ -38,6 +38,11 @@ task fatJar (type : Jar) {
   with jar
 }
 
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // summarize artifacts
 artifacts {
   archives fatJar
