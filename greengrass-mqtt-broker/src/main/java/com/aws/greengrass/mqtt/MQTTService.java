@@ -14,6 +14,9 @@ import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.util.SerializerFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
@@ -24,6 +27,7 @@ import java.io.IOException;
 import java.security.KeyStoreException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -85,7 +89,16 @@ public class MQTTService extends PluginService {
         logger.atInfo().kv("topic", topic.getName()).log("received config update");
         Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
         List<String> caCerts = (List<String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
-        Map<String, String> deviceCerts = (Map<String, String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).toPOJO();
+
+        String serializedDeviceCerts = (String) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).toPOJO();
+        TypeReference<HashMap<String, String>> typeRef = new TypeReference<HashMap<String, String>>() {};
+        Map<String, String> deviceCerts = new HashMap<>();
+        try {
+            deviceCerts = SerializerFactory.getJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
+        } catch (JsonProcessingException e) {
+            logger.atError().cause(e).log("failed to parse device certificates");
+        }
+
         try {
             mqttBrokerKeyStore.updateCertificates(deviceCerts, caCerts);
         } catch (KeyStoreException | IOException | CertificateException e) {
