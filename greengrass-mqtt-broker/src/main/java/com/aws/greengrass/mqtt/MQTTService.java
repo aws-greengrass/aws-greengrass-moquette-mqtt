@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.security.KeyStoreException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,11 +94,12 @@ public class MQTTService extends PluginService {
 
         String serializedDeviceCerts = Coerce.toString(dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).toPOJO());
         TypeReference<HashMap<String, String>> typeRef = new TypeReference<HashMap<String, String>>() {};
-        Map<String, String> deviceCerts = new HashMap<>();
+        Map<String, String> deviceCerts;
         try {
             deviceCerts = SerializerFactory.getJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
         } catch (JsonProcessingException e) {
             logger.atError().cause(e).log("failed to parse device certificates");
+            deviceCerts = Collections.emptyMap();
         }
 
         try {
