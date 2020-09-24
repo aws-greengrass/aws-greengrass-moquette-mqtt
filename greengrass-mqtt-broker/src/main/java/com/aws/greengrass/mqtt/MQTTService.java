@@ -92,7 +92,7 @@ public class MQTTService extends PluginService {
         Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
         List<String> caCerts = (List<String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
 
-        String serializedDeviceCerts = Coerce.toString(dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).toPOJO());
+        String serializedDeviceCerts = Coerce.toString(dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC));
         TypeReference<HashMap<String, String>> typeRef = new TypeReference<HashMap<String, String>>() {};
         Map<String, String> deviceCerts;
         try {
