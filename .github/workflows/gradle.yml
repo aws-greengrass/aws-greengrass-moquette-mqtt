@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: [self-hosted, Linux, greengrass]
+    runs-on: [ self-hosted, Linux, greengrass ]
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 1.8
@@ -63,7 +63,7 @@ jobs:
 
   publish:
     needs: build
-    runs-on: [self-hosted, Linux, greengrass]
+    runs-on: [ self-hosted, Linux, greengrass ]
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
@@ -82,7 +82,7 @@ jobs:
       - run: sudo apt-get install -y awscli
       - run: mkdir -p target/artifacts && cp greengrass-mqtt-broker/build/libs/aws.greengrass.mqtt.broker-0.12.1-fat-jar.jar  target/artifacts/aws.greengrass.Mqtt.jar
       - uses: ./.github/actions/aws-greengrass-component-upload-action
-        name: Upload to GCS
+        name: Upload to GCS Gamma
         env:
           AWS_REGION: us-east-1
         with:
@@ -91,3 +91,15 @@ jobs:
           endpoint: https://evergreen-gamma.us-east-1.amazonaws.com
           autoBumpVersion: true
           publishAsPublic: true
+          additionalReplacements: '{"stage": "gamma"}'
+      - uses: ./.github/actions/aws-greengrass-component-upload-action
+        name: Upload to GCS Prod
+        env:
+          AWS_REGION: us-east-1
+        with:
+          recipePath: recipe.yaml
+          artifactDirectoryPath: target/artifacts
+          endpoint: https://evergreen.us-east-1.amazonaws.com
+          autoBumpVersion: true
+          publishAsPublic: true
+          additionalReplacements: '{"stage": "prod"}'
