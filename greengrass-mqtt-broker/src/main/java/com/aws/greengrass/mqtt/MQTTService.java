@@ -54,10 +54,10 @@ public class MQTTService extends PluginService {
     private boolean serverRunning = false;
 
     /**
-     * Constructor for EvergreenService.
+     * Constructor for GreengrassService.
      *
      * @param topics Root Configuration topic for this service
-     * @param kernel evergreen kernel
+     * @param kernel Greengrass Nucleus
      * @param certificateManager DCM's certificate manager
      */
     @Inject
@@ -68,11 +68,11 @@ public class MQTTService extends PluginService {
     }
 
     @Override
-    protected void install() throws InterruptedException {
-        mqttBrokerKeyStore = new MQTTBrokerKeyStore(kernel.getWorkPath().resolve(SERVICE_NAME));
+    protected void install() {
         try {
+            mqttBrokerKeyStore = new MQTTBrokerKeyStore(kernel.getNucleusPaths().workPath(SERVICE_NAME));
             mqttBrokerKeyStore.initialize();
-        } catch (KeyStoreException e) {
+        } catch (IOException | KeyStoreException e) {
             logger.atError().log("unable to create broker keystore");
             serviceErrored(e);
         }

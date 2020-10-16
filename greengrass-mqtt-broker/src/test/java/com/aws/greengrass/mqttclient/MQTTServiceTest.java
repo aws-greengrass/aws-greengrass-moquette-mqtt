@@ -52,7 +52,7 @@ public class MQTTServiceTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_Evergreen_with_broker_WHEN_start_kernel_THEN_broker_starts_on_port_8883()
+    void GIVEN_Greengrass_with_broker_WHEN_start_nucleus_THEN_broker_starts_on_port_8883()
         throws InterruptedException, IOException {
         CountDownLatch serviceRunning = new CountDownLatch(1);
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
