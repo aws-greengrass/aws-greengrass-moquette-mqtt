@@ -69,4 +69,23 @@ public class MQTTServiceTest extends GGServiceTestUtil {
         Socket socket = new Socket("localhost", 8883);
         socket.close();
     }
+
+    @Test
+    void GIVEN_Greengrass_with_broker_no_tls_WHEN_start_nucleus_THEN_broker_starts_on_port_1883()
+        throws InterruptedException, IOException {
+        CountDownLatch serviceRunning = new CountDownLatch(1);
+        kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
+            getClass().getResource("config_with_no_tls.yaml").toString());
+        kernel.getContext().addGlobalStateChangeListener((GreengrassService service, State was, State newState) -> {
+            if (service.getName().equals(MQTTService.SERVICE_NAME) && service.getState().equals(State.RUNNING)) {
+                serviceRunning.countDown();
+            }
+        });
+        kernel.launch();
+        assertTrue(serviceRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
+
+        // Connect to port 8883 just to confirm server is listening on port
+        Socket socket = new Socket("localhost", 1883);
+        socket.close();
+    }
 }

@@ -1,6 +1,8 @@
 ---
 services:
     aws.greengrass.Mqtt:
+        configuration:
+            useTLS: 'false'
         dependencies:
             - aws.greengrass.CertificateManager
     main:

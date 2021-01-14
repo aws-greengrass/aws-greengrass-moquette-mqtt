@@ -45,7 +45,7 @@ public abstract class IConfig {
     public abstract String getProperty(String name, String defaultValue);
 
     void assignDefaults() {
-        setProperty(BrokerConstants.PORT_PROPERTY_NAME, Integer.toString(BrokerConstants.PORT));
+        // setProperty(BrokerConstants.PORT_PROPERTY_NAME, Integer.toString(BrokerConstants.PORT));
         setProperty(BrokerConstants.HOST_PROPERTY_NAME, BrokerConstants.HOST);
         // setProperty(BrokerConstants.WEB_SOCKET_PORT_PROPERTY_NAME,
         // Integer.toString(BrokerConstants.WEBSOCKET_PORT));

@@ -35,10 +35,13 @@ import java.util.Map;
 import java.util.Properties;
 import javax.inject.Inject;
 
+import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
+
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
     public static final String SERVICE_NAME = "aws.greengrass.Mqtt";
     public static final String DCM_SERVICE_NAME = "aws.greengrass.CertificateManager";
+    private static final String USE_TLS = "useTLS";
 
     // Config Keys
     private static final String RUNTIME_CONFIG_KEY = "runtime";
@@ -52,6 +55,7 @@ public class MQTTService extends PluginService {
     private final CertificateManager certificateManager;
 
     private boolean serverRunning = false;
+    private boolean useTLS = true;
 
     /**
      * Constructor for GreengrassService.
@@ -84,7 +88,9 @@ public class MQTTService extends PluginService {
         } catch (KeyStoreException e) {
             logger.atError().cause(e).log("failed to update MQTT server certificate");
         }
-        restartMqttServer();
+        if (useTLS) {
+            restartMqttServer();
+        }
     }
 
     private synchronized void updateCertificates(WhatHappened what, Topic topic) {
@@ -96,7 +102,7 @@ public class MQTTService extends PluginService {
         TypeReference<HashMap<String, String>> typeRef = new TypeReference<HashMap<String, String>>() {};
         Map<String, String> deviceCerts;
         try {
-            deviceCerts = SerializerFactory.getJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
+            deviceCerts = SerializerFactory.getFailSafeJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
         } catch (JsonProcessingException e) {
             logger.atError().cause(e).log("failed to parse device certificates");
             deviceCerts = Collections.emptyMap();
@@ -107,6 +113,15 @@ public class MQTTService extends PluginService {
         } catch (KeyStoreException | IOException | CertificateException e) {
             logger.atError().cause(e).log("failed to update device and CA certificates");
         }
+        if (useTLS) {
+            restartMqttServer();
+        }
+    }
+
+    private void updateUseTLS(WhatHappened what, Topic topic) {
+        logger.atInfo().kv("topic", topic.getName()).log("received config update");
+        Topic useTLSTopic = this.config.lookup(CONFIGURATION_CONFIG_KEY, USE_TLS).dflt("true");
+        useTLS = Coerce.toBoolean(useTLSTopic);
         restartMqttServer();
     }
 
@@ -127,6 +142,9 @@ public class MQTTService extends PluginService {
             .subscribe(this::updateCertificates);
         dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC)
             .subscribe(this::updateCertificates);
+
+        // Subscribe to update of param useTLS
+        this.config.lookup(CONFIGURATION_CONFIG_KEY, USE_TLS).subscribe(this::updateUseTLS);
 
         try {
             mqttBroker.startServer(getDefaultConfig());
@@ -160,14 +178,18 @@ public class MQTTService extends PluginService {
     private IConfig getDefaultConfig() {
         // TODO - Make configurable
         IConfig defaultConfig = new MemoryConfig(new Properties());
-
-        String password = mqttBrokerKeyStore.getJksPassword();
-        defaultConfig.setProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME, "8883");
-        defaultConfig.setProperty(BrokerConstants.JKS_PATH_PROPERTY_NAME, mqttBrokerKeyStore.getJksPath());
-        defaultConfig.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
-        defaultConfig.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
         defaultConfig.setProperty(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, "true");
-        defaultConfig.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
+
+        if (useTLS) {
+            String password = mqttBrokerKeyStore.getJksPassword();
+            defaultConfig.setProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME, "8883");
+            defaultConfig.setProperty(BrokerConstants.JKS_PATH_PROPERTY_NAME, mqttBrokerKeyStore.getJksPath());
+            defaultConfig.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
+            defaultConfig.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
+            defaultConfig.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
+        } else {
+            defaultConfig.setProperty(BrokerConstants.PORT_PROPERTY_NAME, "1883");
+        }
 
         return defaultConfig;
     }
