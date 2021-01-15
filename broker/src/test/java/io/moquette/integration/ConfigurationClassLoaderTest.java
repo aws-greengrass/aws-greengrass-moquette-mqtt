@@ -45,6 +45,7 @@ public class ConfigurationClassLoaderTest implements IAuthenticator, IAuthorizat
     @After
     public void tearDown() {
         m_server.stopServer();
+        IntegrationUtils.clearTestStorage();
     }
 
     @Test
