@@ -23,6 +23,8 @@ jobs:
           # of our Java SDK, then we can relax this to just the "hashFiles" and exclude "sha"
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}-${{ github.sha }}
       - name: Build with Gradle
+        env:
+          AWS_REGION: us-west-2
         run: ./gradlew clean test --refresh-dependencies
       - name: Upload Failed Test Report
         uses: actions/upload-artifact@v1.0.0
