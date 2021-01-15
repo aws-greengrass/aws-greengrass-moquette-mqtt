@@ -96,7 +96,7 @@ public class MQTTService extends PluginService {
         TypeReference<HashMap<String, String>> typeRef = new TypeReference<HashMap<String, String>>() {};
         Map<String, String> deviceCerts;
         try {
-            deviceCerts = SerializerFactory.getJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
+            deviceCerts = SerializerFactory.getFailSafeJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
         } catch (JsonProcessingException e) {
             logger.atError().cause(e).log("failed to parse device certificates");
             deviceCerts = Collections.emptyMap();
