@@ -16,12 +16,15 @@ import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.util.Coerce;
 import com.aws.greengrass.util.SerializerFactory;
+import com.aws.greengrass.util.Utils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
@@ -35,6 +38,8 @@ import java.util.Map;
 import java.util.Properties;
 import javax.inject.Inject;
 
+import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
+
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
     public static final String SERVICE_NAME = "aws.greengrass.Mqtt";
@@ -45,9 +50,11 @@ public class MQTTService extends PluginService {
     private static final String CERTIFICATES_KEY = "certificates";
     private static final String AUTHORITIES_TOPIC = "authorities";
     private static final String DEVICES_TOPIC = "devices";
+    static final String ENCRYPTION_TOPIC = "encryption";
 
-    private static MQTTBrokerKeyStore mqttBrokerKeyStore;
-    private final Server mqttBroker = new Server();
+    @Getter(AccessLevel.PACKAGE)
+    private final MQTTBrokerKeyStore mqttBrokerKeyStore;
+    private final Server mqttBroker;
     private final Kernel kernel;
     private final CertificateManager certificateManager;
 
@@ -61,18 +68,25 @@ public class MQTTService extends PluginService {
      * @param certificateManager DCM's certificate manager
      */
     @Inject
-    public MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager) {
+    public MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager) throws IOException {
+        this(topics, kernel, certificateManager,
+            new MQTTBrokerKeyStore(kernel.getNucleusPaths().workPath(SERVICE_NAME)), new Server());
+    }
+
+    protected MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager,
+                          MQTTBrokerKeyStore mqttBrokerKeyStore, Server mqttBroker) {
         super(topics);
         this.kernel = kernel;
         this.certificateManager = certificateManager;
+        this.mqttBrokerKeyStore = mqttBrokerKeyStore;
+        this.mqttBroker = mqttBroker;
     }
 
     @Override
     protected void install() {
         try {
-            mqttBrokerKeyStore = new MQTTBrokerKeyStore(kernel.getNucleusPaths().workPath(SERVICE_NAME));
             mqttBrokerKeyStore.initialize();
-        } catch (IOException | KeyStoreException e) {
+        } catch (KeyStoreException e) {
             logger.atError().log("unable to create broker keystore");
             serviceErrored(e);
         }
@@ -113,13 +127,20 @@ public class MQTTService extends PluginService {
     @Override
     public synchronized void startup() {
         // Subscribe to DCM certificate updates
-        try {
-            String brokerCsr = mqttBrokerKeyStore.getCsr();
-            certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
-        } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
-            logger.atError().log("unable to generate broker certificate");
-            serviceErrored(e);
-        }
+        this.config.lookup(CONFIGURATION_CONFIG_KEY, ENCRYPTION_TOPIC).subscribe((why, newv) -> {
+            try {
+                String encryptionAlgorithm = Coerce.toString(newv);
+                if (Utils.isEmpty(encryptionAlgorithm)) {
+                    logger.atDebug().log("encryption null or empty");
+                    return;
+                }
+                String brokerCsr = mqttBrokerKeyStore.getCsr(encryptionAlgorithm);
+                certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
+            } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
+                logger.atError().log("unable to generate broker certificate");
+                serviceErrored(e);
+            }
+        });
 
         // Subscribe to CA and device certificate updates
         Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);

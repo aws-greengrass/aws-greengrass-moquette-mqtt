@@ -3,6 +3,11 @@ services:
     aws.greengrass.Mqtt:
         dependencies:
             - aws.greengrass.CertificateManager
+        configuration:
+            encryption: 'RSA'
+    aws.greengrass.CertificateManager:
+        configuration:
+            ca_encryption: '[RSA]'
     main:
         lifecycle:
             install:

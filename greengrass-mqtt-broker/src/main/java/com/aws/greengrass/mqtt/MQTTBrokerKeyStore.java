@@ -13,8 +13,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -29,18 +29,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import com.aws.greengrass.certificatemanager.certificate.CertificateStore;
+import lombok.AccessLevel;
 import lombok.Getter;
 import org.bouncycastle.operator.OperatorCreationException;
 
 public class MQTTBrokerKeyStore {
     private static final String DEFAULT_BROKER_CN = "Greengrass MQTT";
     private static final String KEYSTORE_FILE_NAME = "keystore.jks";
-    private static final String BROKER_KEY_ALIAS = "pk";
+    static final String BROKER_KEY_ALIAS = "pk";
 
     private final Path rootPath;
     @Getter private final String jksPath;
     @Getter private final String jksPassword;
     private KeyStore brokerKeyStore;
+    @Getter(AccessLevel.PACKAGE)
     private KeyPair brokerKeyPair;
 
     /**
@@ -67,14 +70,6 @@ public class MQTTBrokerKeyStore {
      */
     public void initialize() throws KeyStoreException {
         // Initialize new keystore rather than loading an old one
-        try {
-            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
-            kpg.initialize(2048);
-            brokerKeyPair = kpg.generateKeyPair();
-        } catch (NoSuchAlgorithmException e) {
-            throw new KeyStoreException("unable to generate keypair for broker key store", e);
-        }
-
         KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
         try {
             ks.load(null, jksPassword.toCharArray());
@@ -86,15 +81,32 @@ public class MQTTBrokerKeyStore {
 
     /**
      * Generate CSR from KeyStore private key.
+     * @param encryptionAlgorithm Encryption for broker key
      * @return PEM encoded CSR string
      * @throws IOException IOException
      * @throws OperatorCreationException OperatorCreationException
      */
-    public String getCsr() throws IOException, OperatorCreationException {
+    public String getCsr(String encryptionAlgorithm) throws IOException, OperatorCreationException, KeyStoreException {
+        try {
+            brokerKeyPair = createKeyPair(encryptionAlgorithm);
+        } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+            throw new KeyStoreException("unable to generate keypair for broker key store", e);
+        }
+
         return CertificateRequestGenerator.createCSR(brokerKeyPair,
             DEFAULT_BROKER_CN,
             null,
             new ArrayList<>(Arrays.asList("localhost")));
+    }
+
+    private KeyPair createKeyPair(String encryptionAlgorithm)
+        throws InvalidAlgorithmParameterException, NoSuchAlgorithmException {
+        if (encryptionAlgorithm.equals("RSA")) {
+            return CertificateStore.newRSAKeyPair();
+        } else if (encryptionAlgorithm.equals("EC")) {
+            return CertificateStore.newECKeyPair();
+        }
+        throw new NoSuchAlgorithmException(String.format("Algorithm %s not supported", encryptionAlgorithm));
     }
 
     /**
