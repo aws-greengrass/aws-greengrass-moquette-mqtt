@@ -98,6 +98,11 @@ subprojects {
   }
 
   bintray {
+    if (project.hasProperty('cdkBuild')) {
+      jar.baseName = 'aws.greengrass.MoquetteMqtt'
+      jar.version = ''
+    }
+
     println "Bintray deploy with user [${System.getenv('BINTRAY_USER')}] while working on ${project.name}"
     user = System.getenv('BINTRAY_USER')
     key = System.getenv('BINTRAY_KEY')
