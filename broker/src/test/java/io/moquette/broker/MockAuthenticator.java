@@ -18,6 +18,8 @@ package io.moquette.broker;
 
 import java.util.Map;
 import java.util.Set;
+
+import io.moquette.broker.security.ClientData;
 import io.moquette.broker.security.IAuthenticator;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -36,16 +38,21 @@ public class MockAuthenticator implements IAuthenticator {
     }
 
     @Override
-    public boolean checkValid(String clientId, String username, byte[] password) {
-        if (!m_clientIds.contains(clientId)) {
+    public boolean checkValid(ClientData clientData) {
+        if (!m_clientIds.contains(clientData.getClientId())) {
             return false;
         }
+        if (!clientData.getUsername().isPresent()) {
+            return false;
+        }
+        String username = clientData.getUsername().get();
         if (!m_userPwds.containsKey(username)) {
             return false;
         }
-        if (password == null) {
+        if (!clientData.getPassword().isPresent()) {
             return false;
         }
+        byte[] password = clientData.getPassword().get();
         return m_userPwds.get(username).equals(new String(password, UTF_8));
     }
 

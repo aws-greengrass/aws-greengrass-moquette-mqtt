@@ -21,5 +21,5 @@ package io.moquette.broker.security;
  */
 public interface IAuthenticator {
 
-    boolean checkValid(String clientId, String username, byte[] password);
+    boolean checkValid(ClientData clientData);
 }

@@ -15,16 +15,20 @@
  */
 package io.moquette.broker;
 
+import io.moquette.broker.security.ClientData;
 import io.moquette.broker.subscriptions.Topic;
 import io.moquette.broker.security.IAuthenticator;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.mqtt.*;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.security.cert.X509Certificate;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -223,16 +227,34 @@ final class MQTTConnection {
 
     private boolean login(MqttConnectMessage msg, final String clientId) {
         // handle user authentication
+        ClientData clientData = new ClientData(clientId);
+
+        // if client provides certificate, try cert authentication first
+        SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
+        if (sslhandler != null) {
+            try {
+                X509Certificate certificate = sslhandler.engine().getSession().getPeerCertificateChain()[0];
+                clientData.setCertificate(certificate);
+                if (authenticator.checkValid(clientData)) {
+                    return true;
+                } else {
+                    LOG.error("Authenticator has rejected the MQTT credentials CId={}, certificate={}", clientId, certificate);
+                }
+            } catch (SSLPeerUnverifiedException e) {
+                LOG.error("Client didn't supply any certificate");
+            }
+        }
+
         if (msg.variableHeader().hasUserName()) {
-            byte[] pwd = null;
             if (msg.variableHeader().hasPassword()) {
-                pwd = msg.payload().password().getBytes(StandardCharsets.UTF_8);
+                clientData.setPassword(msg.payload().passwordInBytes());
             } else if (!brokerConfig.isAllowAnonymous()) {
                 LOG.error("Client didn't supply any password and MQTT anonymous mode is disabled CId={}", clientId);
                 return false;
             }
             final String login = msg.payload().userName();
-            if (!authenticator.checkValid(clientId, login, pwd)) {
+            clientData.setUsername(login);
+            if (!authenticator.checkValid(clientData)) {
                 LOG.error("Authenticator has rejected the MQTT credentials CId={}, username={}", clientId, login);
                 return false;
             }

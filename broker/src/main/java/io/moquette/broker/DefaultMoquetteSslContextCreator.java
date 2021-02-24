@@ -40,7 +40,9 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,14 +50,21 @@ import org.slf4j.LoggerFactory;
  * Moquette integration implementation to load SSL certificate from local filesystem path configured in
  * config file.
  */
-class DefaultMoquetteSslContextCreator implements ISslContextCreator {
+public class DefaultMoquetteSslContextCreator implements ISslContextCreator {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultMoquetteSslContextCreator.class);
 
     private final IConfig props;
 
+    private final TrustManager trustManager;
+
     DefaultMoquetteSslContextCreator(IConfig props) {
+        this(props, null);
+    }
+
+    public DefaultMoquetteSslContextCreator(IConfig props, TrustManager trustManager) {
         this.props = Objects.requireNonNull(props);
+        this.trustManager = trustManager;
     }
 
     @Override
@@ -149,14 +158,18 @@ class DefaultMoquetteSslContextCreator implements ISslContextCreator {
         throw new KeyManagementException("the SSL key-store does not contain a private key");
     }
 
-    private static void addClientAuthentication(KeyStore ks, SslContextBuilder contextBuilder)
+    private void addClientAuthentication(KeyStore ks, SslContextBuilder contextBuilder)
             throws NoSuchAlgorithmException, KeyStoreException {
-        LOG.warn("Client authentication is enabled. The keystore will be used as a truststore.");
-        // use keystore as truststore, as integration needs to trust certificates signed by the integration certificates
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        tmf.init(ks);
         contextBuilder.clientAuth(ClientAuth.REQUIRE);
-        contextBuilder.trustManager(tmf);
+        if (trustManager != null) {
+            contextBuilder.trustManager(trustManager);
+        } else {
+            LOG.warn("No trust manager present. The keystore will be used as a truststore.");
+            // use keystore as truststore, as integration needs to trust certificates signed by the integration certificates
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(ks);
+            contextBuilder.trustManager(tmf);
+        }
     }
 
     private SslProvider getSSLProvider() {
