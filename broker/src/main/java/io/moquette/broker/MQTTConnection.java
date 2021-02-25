@@ -543,7 +543,22 @@ final class MQTTConnection {
     }
 
     int nextPacketId() {
-        return lastPacketId.incrementAndGet();
+        final int next = lastPacketId.incrementAndGet();
+        if (next <= 65_535) {
+            return next;
+        }
+        return resetPacketId();
+    }
+
+    private int resetPacketId() {
+        synchronized(lastPacketId) {
+            if (lastPacketId.get() <= 65_535) {
+                // Another thread reset it before us...
+                return lastPacketId.incrementAndGet();
+            }
+            lastPacketId.set(1);
+            return 1;
+        }
     }
 
     @Override
