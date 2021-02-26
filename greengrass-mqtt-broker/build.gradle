@@ -32,8 +32,13 @@ test {
 }
 
 task fatJar (type : Jar) {
-  classifier = 'fat-jar'
-  baseName = 'aws.greengrass.mqtt.broker'
+  if (project.hasProperty('cdkBuild')) {
+    baseName = 'aws.greengrass.MoquetteMqtt'
+    version = ''
+  } else {
+    classifier = 'fat-jar'
+    baseName = 'aws.greengrass.mqtt.broker'
+  }
   from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
   with jar
 }
