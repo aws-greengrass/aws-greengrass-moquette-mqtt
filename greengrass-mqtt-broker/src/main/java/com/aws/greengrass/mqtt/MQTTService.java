@@ -87,7 +87,6 @@ public class MQTTService extends PluginService {
         try {
             mqttBrokerKeyStore.initialize();
         } catch (KeyStoreException e) {
-            logger.atError().log("unable to create broker keystore");
             serviceErrored(e);
         }
     }
@@ -131,13 +130,12 @@ public class MQTTService extends PluginService {
             try {
                 String encryptionAlgorithm = Coerce.toString(newv);
                 if (Utils.isEmpty(encryptionAlgorithm)) {
-                    logger.atDebug().log("encryption null or empty");
+                    logger.atError().log("encryption null or empty");
                     return;
                 }
                 String brokerCsr = mqttBrokerKeyStore.getCsr(encryptionAlgorithm);
                 certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
             } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
-                logger.atError().log("unable to generate broker certificate");
                 serviceErrored(e);
             }
         });
