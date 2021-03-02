@@ -46,6 +46,10 @@ public class MQTTBrokerKeyStore {
     @Getter(AccessLevel.PACKAGE)
     private KeyPair brokerKeyPair;
 
+    public enum EncryptionType {
+        RSA, EC
+    }
+
     /**
      * MQTTBrokerKeyStore constructor
      * @param rootDir Directory to save KeyStore artifacts.
@@ -86,7 +90,8 @@ public class MQTTBrokerKeyStore {
      * @throws IOException IOException
      * @throws OperatorCreationException OperatorCreationException
      */
-    public String getCsr(String encryptionAlgorithm) throws IOException, OperatorCreationException, KeyStoreException {
+    public String getCsr(EncryptionType encryptionAlgorithm)
+        throws IOException, OperatorCreationException, KeyStoreException {
         try {
             brokerKeyPair = createKeyPair(encryptionAlgorithm);
         } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
@@ -99,14 +104,13 @@ public class MQTTBrokerKeyStore {
             new ArrayList<>(Arrays.asList("localhost")));
     }
 
-    private KeyPair createKeyPair(String encryptionAlgorithm)
+    private KeyPair createKeyPair(EncryptionType encryptionAlgorithm)
         throws InvalidAlgorithmParameterException, NoSuchAlgorithmException {
-        if (encryptionAlgorithm.equals("RSA")) {
-            return CertificateStore.newRSAKeyPair();
-        } else if (encryptionAlgorithm.equals("EC")) {
+        if (encryptionAlgorithm.equals(EncryptionType.EC)) {
             return CertificateStore.newECKeyPair();
+        } else {
+            return CertificateStore.newRSAKeyPair();
         }
-        throw new NoSuchAlgorithmException(String.format("Algorithm %s not supported", encryptionAlgorithm));
     }
 
     /**

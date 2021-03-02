@@ -28,6 +28,7 @@ import lombok.Getter;
 import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
+import java.security.KeyPair;
 import java.security.KeyStoreException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -125,17 +126,32 @@ public class MQTTService extends PluginService {
 
     @Override
     public synchronized void startup() {
-        // Subscribe to DCM certificate updates
         this.config.lookup(CONFIGURATION_CONFIG_KEY, ENCRYPTION_TOPIC).subscribe((why, newv) -> {
             try {
                 String encryptionAlgorithm = Coerce.toString(newv);
+                KeyPair brokerKeyPair = mqttBrokerKeyStore.getBrokerKeyPair();
+
+                String brokerCsr;
                 if (Utils.isEmpty(encryptionAlgorithm)) {
-                    logger.atError().log("encryption null or empty");
-                    return;
+                    if (brokerKeyPair != null) {
+                        logger.atDebug().log("Encryption null or empty. A key already exists");
+                        return;
+                    } else {
+                        logger.atInfo().log("Encryption null or empty. Defaulting to RSA");
+                        brokerCsr = mqttBrokerKeyStore.getCsr(MQTTBrokerKeyStore.EncryptionType.RSA);
+                    }
+                } else {
+                    if (brokerKeyPair != null && brokerKeyPair.getPrivate().getAlgorithm().equals(encryptionAlgorithm)) {
+                        logger.atDebug().log("Key with %s encryption already exists", encryptionAlgorithm);
+                        return;
+                    } else {
+                        brokerCsr = mqttBrokerKeyStore.getCsr(
+                            MQTTBrokerKeyStore.EncryptionType.valueOf(encryptionAlgorithm));
+                    }
                 }
-                String brokerCsr = mqttBrokerKeyStore.getCsr(encryptionAlgorithm);
                 certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
-            } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
+            } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException
+                | IllegalArgumentException e) {
                 serviceErrored(e);
             }
         });

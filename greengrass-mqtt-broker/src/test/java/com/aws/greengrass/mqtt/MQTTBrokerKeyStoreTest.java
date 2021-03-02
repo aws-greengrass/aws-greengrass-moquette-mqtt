@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.mqtt;
 
+import com.aws.greengrass.mqtt.MQTTBrokerKeyStore.EncryptionType;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -124,7 +125,7 @@ public class MQTTBrokerKeyStoreTest {
 
     @Test
     void GIVEN_MQTTBrokerKeyStore_WHEN_getCsr_called_with_RSA_THEN_valid_keypair_and_csr_generated() throws Exception {
-        String csr = mqttBrokerKeyStore.getCsr("RSA");
+        String csr = mqttBrokerKeyStore.getCsr(EncryptionType.RSA);
         assertThat(mqttBrokerKeyStore.getBrokerKeyPair().getPrivate().getAlgorithm(), is("RSA"));
         assertThat(csr, containsString(BEGIN_CSR));
         assertThat(csr, containsString(END_CSR));
@@ -132,21 +133,16 @@ public class MQTTBrokerKeyStoreTest {
 
     @Test
     void GIVEN_MQTTBrokerKeyStore_WHEN_getCsr_called_with_EC_THEN_valid_keypair_and_csr_generated() throws Exception {
-        String csr = mqttBrokerKeyStore.getCsr("EC");
+        String csr = mqttBrokerKeyStore.getCsr(EncryptionType.EC);
         assertThat(mqttBrokerKeyStore.getBrokerKeyPair().getPrivate().getAlgorithm(), is("EC"));
         assertThat(csr, containsString(BEGIN_CSR));
         assertThat(csr, containsString(END_CSR));
     }
 
     @Test
-    void GIVEN_MQTTBrokerKeyStore_WHEN_getCsr_called_with_unsupported_encryption_THEN_throws() throws Exception {
-        assertThrows(KeyStoreException.class, () -> mqttBrokerKeyStore.getCsr("DH"));
-    }
-
-    @Test
     void GIVEN_MQTTBrokerKeyStore_WHEN_updateServerCertificate_called_THEN_success() throws Exception {
         mqttBrokerKeyStore.initialize();
-        mqttBrokerKeyStore.getCsr("RSA");
+        mqttBrokerKeyStore.getCsr(EncryptionType.RSA);
         X509Certificate testServerCert = pemToX509Certificate(IOT_CERT);
         mqttBrokerKeyStore.updateServerCertificate(testServerCert);
 

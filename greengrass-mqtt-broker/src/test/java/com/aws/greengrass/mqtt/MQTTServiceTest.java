@@ -113,14 +113,22 @@ public class MQTTServiceTest extends GGServiceTestUtil {
         assertThat(initialKey.getPrivate().getAlgorithm(), is("RSA"));
 
         kernel.locate(MQTTService.SERVICE_NAME).getConfig()
-            .find(CONFIGURATION_CONFIG_KEY, MQTTService.ENCRYPTION_TOPIC).withValue("EC");
+            .find(CONFIGURATION_CONFIG_KEY, MQTTService.ENCRYPTION_TOPIC).withValue("RSA");
         // Block until subscriber has finished updating
-        kernel.getContext().runOnPublishQueueAndWait(() -> {
-        });
+        kernel.getContext().waitForPublishQueueToClear();
 
         KeyPair secondKey = mqttService.getMqttBrokerKeyStore().getBrokerKeyPair();
-        assertThat(secondKey.getPrivate().getAlgorithm(), is("EC"));
-        assertThat(secondKey, is(not(initialKey)));
+        assertThat(secondKey.getPrivate().getAlgorithm(), is("RSA"));
+        assertThat(secondKey, is(initialKey));
+
+        kernel.locate(MQTTService.SERVICE_NAME).getConfig()
+            .find(CONFIGURATION_CONFIG_KEY, MQTTService.ENCRYPTION_TOPIC).withValue("EC");
+        // Block until subscriber has finished updating
+        kernel.getContext().waitForPublishQueueToClear();
+
+        KeyPair thirdKey = mqttService.getMqttBrokerKeyStore().getBrokerKeyPair();
+        assertThat(thirdKey.getPrivate().getAlgorithm(), is("EC"));
+        assertThat(thirdKey, is(not(initialKey)));
     }
 
     @Test
