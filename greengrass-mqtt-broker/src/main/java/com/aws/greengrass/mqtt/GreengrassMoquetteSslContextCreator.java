@@ -1,20 +1,4 @@
-/*
- * Copyright (c) 2012-2018 The original author or authors
- * ------------------------------------------------------
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * and Apache License v2.0 which accompanies this distribution.
- *
- * The Eclipse Public License is available at
- * http://www.eclipse.org/legal/epl-v10.html
- *
- * The Apache License v2.0 is available at
- * http://www.opensource.org/licenses/apache2.0.php
- *
- * You may elect to redistribute this code under either of these licenses.
- */
-
-package io.moquette.broker;
+package com.aws.greengrass.mqtt;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -34,28 +18,32 @@ import java.util.Collections;
 import java.util.Objects;
 
 import io.moquette.BrokerConstants;
+import io.moquette.broker.ISslContextCreator;
 import io.moquette.broker.config.IConfig;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Moquette integration implementation to load SSL certificate from local filesystem path configured in
- * config file.
- */
-class DefaultMoquetteSslContextCreator implements ISslContextCreator {
-
-    private static final Logger LOG = LoggerFactory.getLogger(DefaultMoquetteSslContextCreator.class);
+public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
+    private static final Logger LOG = LoggerFactory.getLogger(GreengrassMoquetteSslContextCreator.class);
 
     private final IConfig props;
 
-    DefaultMoquetteSslContextCreator(IConfig props) {
+    private final TrustManager trustManager;
+
+    GreengrassMoquetteSslContextCreator(IConfig props) {
+        this(props, null);
+    }
+
+    public GreengrassMoquetteSslContextCreator(IConfig props, TrustManager trustManager) {
         this.props = Objects.requireNonNull(props);
+        this.trustManager = trustManager;
     }
 
     @Override
@@ -73,16 +61,16 @@ class DefaultMoquetteSslContextCreator implements ISslContextCreator {
             KeyStore ks = loadKeyStore();
             SslContextBuilder contextBuilder;
             switch (sslProvider) {
-            case JDK:
-                contextBuilder = builderWithJdkProvider(ks, keyPassword);
-                break;
-            case OPENSSL:
-            case OPENSSL_REFCNT:
-                contextBuilder = builderWithOpenSSLProvider(ks, keyPassword);
-                break;
-            default:
-                LOG.error("unsupported SSL provider {}", sslProvider);
-                return null;
+                case JDK:
+                    contextBuilder = builderWithJdkProvider(ks, keyPassword);
+                    break;
+                case OPENSSL:
+                case OPENSSL_REFCNT:
+                    contextBuilder = builderWithOpenSSLProvider(ks, keyPassword);
+                    break;
+                default:
+                    LOG.error("unsupported SSL provider {}", sslProvider);
+                    return null;
             }
             // if client authentification is enabled a trustmanager needs to be added to the ServerContext
             String sNeedsClientAuth = props.getProperty(BrokerConstants.NEED_CLIENT_AUTH, "false");
@@ -121,7 +109,7 @@ class DefaultMoquetteSslContextCreator implements ISslContextCreator {
     }
 
     private static SslContextBuilder builderWithJdkProvider(KeyStore ks, String keyPassword)
-            throws GeneralSecurityException {
+        throws GeneralSecurityException {
         LOG.info("Initializing key manager...");
         final KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(ks, keyPassword.toCharArray());
@@ -136,7 +124,7 @@ class DefaultMoquetteSslContextCreator implements ISslContextCreator {
      * TODO: SNI is currently not supported, we use only the first found private key.
      */
     private static SslContextBuilder builderWithOpenSSLProvider(KeyStore ks, String keyPassword)
-            throws GeneralSecurityException {
+        throws GeneralSecurityException {
         for (String alias : Collections.list(ks.aliases())) {
             if (ks.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)) {
                 PrivateKey key = (PrivateKey) ks.getKey(alias, keyPassword.toCharArray());
@@ -149,14 +137,18 @@ class DefaultMoquetteSslContextCreator implements ISslContextCreator {
         throw new KeyManagementException("the SSL key-store does not contain a private key");
     }
 
-    private static void addClientAuthentication(KeyStore ks, SslContextBuilder contextBuilder)
-            throws NoSuchAlgorithmException, KeyStoreException {
-        LOG.warn("Client authentication is enabled. The keystore will be used as a truststore.");
-        // use keystore as truststore, as integration needs to trust certificates signed by the integration certificates
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        tmf.init(ks);
+    private void addClientAuthentication(KeyStore ks, SslContextBuilder contextBuilder)
+        throws NoSuchAlgorithmException, KeyStoreException {
         contextBuilder.clientAuth(ClientAuth.REQUIRE);
-        contextBuilder.trustManager(tmf);
+        if (trustManager != null) {
+            contextBuilder.trustManager(trustManager);
+        } else {
+            LOG.warn("No trust manager present. The keystore will be used as a truststore.");
+            // use keystore as truststore, as integration needs to trust certificates signed by the integration certificates
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(ks);
+            contextBuilder.trustManager(tmf);
+        }
     }
 
     private SslProvider getSSLProvider() {

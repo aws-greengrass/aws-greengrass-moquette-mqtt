@@ -19,12 +19,10 @@ import com.aws.greengrass.util.SerializerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.moquette.BrokerConstants;
-import io.moquette.broker.DefaultMoquetteSslContextCreator;
 import io.moquette.broker.ISslContextCreator;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
-import io.moquette.broker.security.CertificateAuthenticator;
 import io.moquette.broker.security.IAuthenticator;
 import org.bouncycastle.operator.OperatorCreationException;
 
@@ -152,7 +150,7 @@ public class MQTTService extends PluginService {
             .subscribe(this::updateCertificates);
 
         IConfig config = getDefaultConfig();
-        ISslContextCreator sslContextCreator = new DefaultMoquetteSslContextCreator(config, allowAllTrustManager);
+        ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
         mqttBroker.startServer(config, null, sslContextCreator, authenticator, null);
         serverRunning = true;
         reportState(State.RUNNING);
@@ -168,7 +166,7 @@ public class MQTTService extends PluginService {
         if (serverRunning) {
             mqttBroker.stopServer();
             IConfig config = getDefaultConfig();
-            ISslContextCreator sslContextCreator = new DefaultMoquetteSslContextCreator(config, allowAllTrustManager);
+            ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
             mqttBroker.startServer(config, null, sslContextCreator, authenticator, null);
         }
     }

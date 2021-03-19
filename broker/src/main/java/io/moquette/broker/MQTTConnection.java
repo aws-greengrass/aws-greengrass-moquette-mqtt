@@ -233,12 +233,12 @@ final class MQTTConnection {
         SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
         if (sslhandler != null) {
             try {
-                X509Certificate certificate = sslhandler.engine().getSession().getPeerCertificateChain()[0];
-                clientData.setCertificate(certificate);
+                X509Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificateChain();
+                clientData.setCertificate(certificateChain);
                 if (authenticator.checkValid(clientData)) {
                     return true;
                 } else {
-                    LOG.error("Authenticator has rejected the MQTT credentials CId={}, certificate={}", clientId, certificate);
+                    LOG.error("Authenticator has rejected the MQTT credentials CId={}, certificate chain={}", clientId, certificateChain);
                 }
             } catch (SSLPeerUnverifiedException e) {
                 LOG.error("Client didn't supply any certificate");

@@ -11,7 +11,7 @@ public class ClientData {
 
     @NonNull private final String clientId;
     private Optional<String> username = Optional.empty();
-    private Optional<X509Certificate> certificate = Optional.empty();
+    private Optional<X509Certificate[]> certificateChain = Optional.empty();
     private Optional<byte[]> password = Optional.empty();
 
     public ClientData(String clientId) {
@@ -22,8 +22,8 @@ public class ClientData {
         this.username = Optional.ofNullable(username);
     }
 
-    public void setCertificate(X509Certificate certificate) {
-        this.certificate = Optional.ofNullable(certificate);
+    public void setCertificate(X509Certificate[] certificateChain) {
+        this.certificateChain = Optional.ofNullable(certificateChain);
     }
 
     public void setPassword(byte[] password) {
