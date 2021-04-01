@@ -32,6 +32,7 @@ import static org.junit.Assert.assertTrue;
 public class DBAuthenticatorTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(DBAuthenticatorTest.class);
+    private static final String TEST_CLIENT_ID = "testClientId";
 
     public static final String ORG_H2_DRIVER = "org.h2.Driver";
     public static final String JDBC_H2_MEM_TEST = "jdbc:h2:mem:test";
@@ -72,7 +73,7 @@ public class DBAuthenticatorTest {
                 JDBC_H2_MEM_TEST,
                 "SELECT PASSWORD FROM ACCOUNT WHERE LOGIN=?",
                 SHA_256);
-        ClientData clientData = new ClientData(null);
+        ClientData clientData = new ClientData(TEST_CLIENT_ID);
         clientData.setUsername("dbuser");
         clientData.setPassword("password".getBytes(UTF_8));
         assertTrue(dbAuthenticator.checkValid(clientData));
@@ -85,7 +86,7 @@ public class DBAuthenticatorTest {
                 JDBC_H2_MEM_TEST,
                 "SELECT PASSWORD FROM ACCOUNT WHERE LOGIN=?",
                 SHA_256);
-        ClientData clientData = new ClientData(null);
+        ClientData clientData = new ClientData(TEST_CLIENT_ID);
         clientData.setUsername("dbuser2");
         clientData.setPassword("password".getBytes(UTF_8));
         assertFalse(dbAuthenticator.checkValid(clientData));
@@ -98,7 +99,7 @@ public class DBAuthenticatorTest {
                 JDBC_H2_MEM_TEST,
                 "SELECT PASSWORD FROM ACCOUNT WHERE LOGIN=?",
                 SHA_256);
-        ClientData clientData = new ClientData(null);
+        ClientData clientData = new ClientData(TEST_CLIENT_ID);
         clientData.setUsername("dbuser");
         clientData.setPassword("wrongPassword".getBytes(UTF_8));
         assertFalse(dbAuthenticator.checkValid(clientData));

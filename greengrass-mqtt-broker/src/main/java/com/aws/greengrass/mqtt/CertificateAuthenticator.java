@@ -15,7 +15,7 @@ public class CertificateAuthenticator implements IAuthenticator {
         String clientId = clientData.getClientId();
 
         if (!clientData.getCertificateChain().isPresent()) {
-            LOG.info("No certificate in client data");
+            LOG.error("No certificate in client data");
             return false;
         }
         X509Certificate[] certificateChain = clientData.getCertificateChain().get();

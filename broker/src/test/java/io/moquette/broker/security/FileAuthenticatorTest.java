@@ -25,12 +25,14 @@ import static org.junit.Assert.assertTrue;
 @SuppressWarnings("deprecation")
 public class FileAuthenticatorTest {
 
+    private static final String TEST_CLIENT_ID = "testClientId";
+
     @Test
     public void loadPasswordFile_verifyValid() {
         String file = getClass().getResource("/password_file.conf").getPath();
         IAuthenticator auth = new FileAuthenticator(null, file);
 
-        ClientData clientData = new ClientData(null);
+        ClientData clientData = new ClientData(TEST_CLIENT_ID);
         clientData.setUsername("testuser");
         clientData.setPassword("passwd".getBytes(UTF_8));
         assertTrue(auth.checkValid(clientData));
@@ -41,7 +43,7 @@ public class FileAuthenticatorTest {
         String file = getClass().getResource("/password_file.conf").getPath();
         IAuthenticator auth = new FileAuthenticator(null, file);
 
-        ClientData clientData = new ClientData(null);
+        ClientData clientData = new ClientData(TEST_CLIENT_ID);
         clientData.setUsername("testuser2");
         clientData.setPassword("passwd".getBytes(UTF_8));
         assertFalse(auth.checkValid(clientData));
@@ -51,7 +53,7 @@ public class FileAuthenticatorTest {
     public void loadPasswordFile_verifyDirectoryRef() {
         IAuthenticator auth = new FileAuthenticator("", "");
 
-        ClientData clientData = new ClientData(null);
+        ClientData clientData = new ClientData(TEST_CLIENT_ID);
         clientData.setUsername("testuser2");
         clientData.setPassword("passwd".getBytes(UTF_8));
         assertFalse(auth.checkValid(clientData));

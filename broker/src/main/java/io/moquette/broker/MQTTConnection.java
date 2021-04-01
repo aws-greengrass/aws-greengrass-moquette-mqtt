@@ -161,7 +161,25 @@ final class MQTTConnection {
                       username, channel);
         }
 
-        if (!login(msg, clientId)) {
+        ClientData clientData = new ClientData(clientId);
+        SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
+        if (sslhandler != null) {
+            try {
+                X509Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificateChain();
+                clientData.setCertificateChain(certificateChain);
+            } catch (SSLPeerUnverifiedException e) {
+                LOG.debug("Client didn't supply any certificate");
+            }
+        }
+
+        if (msg.variableHeader().hasUserName()) {
+            clientData.setUsername(msg.payload().userName());
+        }
+        if (msg.variableHeader().hasPassword()) {
+            clientData.setPassword(msg.payload().passwordInBytes());
+        }
+
+        if (!login(clientData)) {
             abortConnection(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD);
             channel.close().addListener(CLOSE_ON_FAILURE);
             return;
@@ -225,42 +243,33 @@ final class MQTTConnection {
         return new MqttConnAckMessage(mqttFixedHeader, mqttConnAckVariableHeader);
     }
 
-    private boolean login(MqttConnectMessage msg, final String clientId) {
+    private boolean login(final ClientData clientData) {
         // handle user authentication
-        ClientData clientData = new ClientData(clientId);
 
-        // if client provides certificate, try cert authentication first
-        SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
-        if (sslhandler != null) {
-            try {
-                X509Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificateChain();
-                clientData.setCertificate(certificateChain);
-                if (authenticator.checkValid(clientData)) {
-                    return true;
-                } else {
-                    LOG.error("Authenticator has rejected the MQTT credentials CId={}, certificate chain={}", clientId, certificateChain);
-                }
-            } catch (SSLPeerUnverifiedException e) {
-                LOG.error("Client didn't supply any certificate");
+        if (clientData.getCertificateChain().isPresent()) {
+            if (authenticator.checkValid(clientData)) {
+                return true;
+            } else {
+                LOG.error("Authenticator has rejected the MQTT credentials CId={}, certificate chain={}",
+                    clientData.getClientId(), clientData.getCertificateChain().get());
             }
         }
 
-        if (msg.variableHeader().hasUserName()) {
-            if (msg.variableHeader().hasPassword()) {
-                clientData.setPassword(msg.payload().passwordInBytes());
-            } else if (!brokerConfig.isAllowAnonymous()) {
-                LOG.error("Client didn't supply any password and MQTT anonymous mode is disabled CId={}", clientId);
+        if (clientData.getUsername().isPresent()) {
+            if (!clientData.getPassword().isPresent() && !brokerConfig.isAllowAnonymous()) {
+                LOG.error("Client didn't supply any password and MQTT anonymous mode is disabled CId={}",
+                    clientData.getClientId());
                 return false;
             }
-            final String login = msg.payload().userName();
-            clientData.setUsername(login);
             if (!authenticator.checkValid(clientData)) {
-                LOG.error("Authenticator has rejected the MQTT credentials CId={}, username={}", clientId, login);
+                LOG.error("Authenticator has rejected the MQTT credentials CId={}, username={}",
+                    clientData.getClientId(), clientData.getUsername().get());
                 return false;
             }
-            NettyUtils.userName(channel, login);
+            NettyUtils.userName(channel, clientData.getUsername().get());
         } else if (!brokerConfig.isAllowAnonymous()) {
-            LOG.error("Client didn't supply any credentials and MQTT anonymous mode is disabled. CId={}", clientId);
+            LOG.error("Client didn't supply any credentials and MQTT anonymous mode is disabled. CId={}",
+                clientData.getClientId());
             return false;
         }
         return true;
