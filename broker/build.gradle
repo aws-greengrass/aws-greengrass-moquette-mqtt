@@ -36,7 +36,4 @@ dependencies {
     testCompile group: 'com.h2database', name: 'h2', version:'1.4.196'
 
     testRuntime group: 'io.netty', name: 'netty-tcnative', version: '2.0.10.Final', classifier: 'linux-x86_64'
-
-    compileOnly 'org.projectlombok:lombok:1.18.12'
-    annotationProcessor 'org.projectlombok:lombok:1.18.12'
 }
