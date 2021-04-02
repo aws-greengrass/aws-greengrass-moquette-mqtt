@@ -20,6 +20,7 @@ import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
+import io.moquette.broker.security.ClientData;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.Topic;
@@ -65,7 +66,7 @@ public class ConfigurationClassLoaderTest implements IAuthenticator, IAuthorizat
     }
 
     @Override
-    public boolean checkValid(String clientID, String username, byte[] password) {
+    public boolean checkValid(ClientData clientData) {
         return true;
     }
 

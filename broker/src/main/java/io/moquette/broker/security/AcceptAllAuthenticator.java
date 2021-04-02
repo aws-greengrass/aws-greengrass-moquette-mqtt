@@ -19,7 +19,7 @@ package io.moquette.broker.security;
 public class AcceptAllAuthenticator implements IAuthenticator {
 
     @Override
-    public boolean checkValid(String clientId, String username, byte[] password) {
+    public boolean checkValid(ClientData clientData) {
         return true;
     }
 }

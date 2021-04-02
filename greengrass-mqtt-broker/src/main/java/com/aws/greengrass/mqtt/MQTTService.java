@@ -19,9 +19,11 @@ import com.aws.greengrass.util.SerializerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.moquette.BrokerConstants;
+import io.moquette.broker.ISslContextCreator;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
+import io.moquette.broker.security.IAuthenticator;
 import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
@@ -34,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import javax.inject.Inject;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
@@ -50,6 +54,23 @@ public class MQTTService extends PluginService {
     private final Server mqttBroker = new Server();
     private final Kernel kernel;
     private final CertificateManager certificateManager;
+    private final IAuthenticator authenticator = new CertificateAuthenticator();
+    private final TrustManager allowAllTrustManager = new X509TrustManager() {
+        @Override
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) {
+
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] x509Certificates, String s) {
+
+        }
+
+        @Override
+        public X509Certificate[] getAcceptedIssuers() {
+            return new X509Certificate[0];
+        }
+    };
 
     private boolean serverRunning = false;
 
@@ -128,13 +149,10 @@ public class MQTTService extends PluginService {
         dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC)
             .subscribe(this::updateCertificates);
 
-        try {
-            mqttBroker.startServer(getDefaultConfig());
-            serverRunning = true;
-        } catch (IOException e) {
-            serviceErrored(e);
-            return;
-        }
+        IConfig config = getDefaultConfig();
+        ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
+        mqttBroker.startServer(config, null, sslContextCreator, authenticator, null);
+        serverRunning = true;
         reportState(State.RUNNING);
     }
 
@@ -146,14 +164,10 @@ public class MQTTService extends PluginService {
 
     private synchronized void restartMqttServer() {
         if (serverRunning) {
-            try {
-                mqttBroker.stopServer();
-                mqttBroker.startServer(getDefaultConfig());
-            } catch (IOException e) {
-                // TODO - handle this more gracefully
-                logger.atError().log("unable to restart broker");
-                serviceErrored(e);
-            }
+            mqttBroker.stopServer();
+            IConfig config = getDefaultConfig();
+            ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
+            mqttBroker.startServer(config, null, sslContextCreator, authenticator, null);
         }
     }
 

@@ -112,11 +112,14 @@ public class ResourceAuthenticator implements IAuthenticator {
     }
 
     @Override
-    public boolean checkValid(String clientId, String username, byte[] password) {
-        if (username == null || password == null) {
+    public boolean checkValid(ClientData clientData) {
+        if (!clientData.getUsername().isPresent() || !clientData.getPassword().isPresent()) {
             LOG.info("username or password was null");
             return false;
         }
+        String username = clientData.getUsername().get();
+        byte[] password = clientData.getPassword().get();
+
         String foundPwq = m_identities.get(username);
         if (foundPwq == null) {
             return false;
