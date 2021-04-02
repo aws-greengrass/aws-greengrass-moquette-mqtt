@@ -1,5 +1,4 @@
 apply plugin: 'checkstyle'
-apply plugin: 'com.github.spotbugs'
 apply plugin: 'net.ltgt.errorprone'
 
 dependencies {
@@ -11,10 +10,4 @@ checkstyle {
     configFile = new File(rootDir, 'checkstyle.xml')
     ignoreFailures false
     toolVersion = '6.7'
-}
-
-spotbugs {
-    toolVersion = '3.1.1'
-    ignoreFailures true
-    omitVisitors = ['RuntimeExceptionCapture']
 }

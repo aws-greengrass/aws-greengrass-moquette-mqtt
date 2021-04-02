@@ -3,7 +3,7 @@ description = 'Greengrass - MQTT - broker'
 apply plugin: 'java'
 
 repositories {
-  maven { url "https://d10d248laylpoq.cloudfront.net" }
+  maven { url "https://d2jrmugq4soldf.cloudfront.net/snapshots" }
 }
 
 dependencies {
@@ -12,13 +12,13 @@ dependencies {
   testImplementation('org.junit.jupiter:junit-jupiter-api:5.6.2')
   testRuntime('org.junit.jupiter:junit-jupiter-engine:5.6.2')
 
-  compileOnly group: 'com.aws.greengrass', name: 'nucleus', version:'1.0-SNAPSHOT'
-  testCompile group: 'com.aws.greengrass', name: 'nucleus', version:'1.0-SNAPSHOT'
+  compileOnly group: 'com.aws.greengrass', name: 'nucleus', version:'2.0.0-SNAPSHOT'
+  testCompile group: 'com.aws.greengrass', name: 'nucleus', version:'2.0.0-SNAPSHOT'
   testCompile group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.2.4'
-  testCompile group: 'com.aws.greengrass', name: 'nucleus', version:'1.0-SNAPSHOT', classifier: 'tests'
+  testCompile group: 'com.aws.greengrass', name: 'nucleus', version:'2.0.0-SNAPSHOT', classifier: 'tests'
 
-  compileOnly group: 'com.aws.greengrass', name: 'certificate-manager', version:'1.0-SNAPSHOT'
-  testCompile group: 'com.aws.greengrass', name: 'certificate-manager', version:'1.0-SNAPSHOT'
+  compileOnly group: 'com.aws.greengrass', name: 'certificate-manager', version:'2.0.0-SNAPSHOT'
+  testCompile group: 'com.aws.greengrass', name: 'certificate-manager', version:'2.0.0-SNAPSHOT'
 
   compileOnly 'org.projectlombok:lombok:1.18.12'
   annotationProcessor 'org.projectlombok:lombok:1.18.12'
@@ -32,8 +32,8 @@ test {
 }
 
 task fatJar (type : Jar) {
-  classifier = 'fat-jar'
-  baseName = 'aws.greengrass.mqtt.broker'
+  baseName = 'aws.greengrass.MoquetteMqtt'
+  version = ''
   from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
   with jar
 }
