@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.mqtt;
+package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.certificatemanager.CertificateManager;
 import com.aws.greengrass.certificatemanager.certificate.CsrProcessingException;
@@ -41,7 +41,7 @@ import javax.net.ssl.X509TrustManager;
 
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
-    public static final String SERVICE_NAME = "aws.greengrass.Mqtt";
+    public static final String SERVICE_NAME = "aws.greengrass.clientdevices.Mqtt.Moquette";
     public static final String DCM_SERVICE_NAME = "aws.greengrass.CertificateManager";
 
     // Config Keys
@@ -77,8 +77,8 @@ public class MQTTService extends PluginService {
     /**
      * Constructor for GreengrassService.
      *
-     * @param topics Root Configuration topic for this service
-     * @param kernel Greengrass Nucleus
+     * @param topics             Root Configuration topic for this service
+     * @param kernel             Greengrass Nucleus
      * @param certificateManager DCM's certificate manager
      */
     @Inject
@@ -94,7 +94,6 @@ public class MQTTService extends PluginService {
             mqttBrokerKeyStore = new MQTTBrokerKeyStore(kernel.getNucleusPaths().workPath(SERVICE_NAME));
             mqttBrokerKeyStore.initialize();
         } catch (IOException | KeyStoreException e) {
-            logger.atError().log("unable to create broker keystore");
             serviceErrored(e);
         }
     }
@@ -108,13 +107,20 @@ public class MQTTService extends PluginService {
         restartMqttServer();
     }
 
+    @SuppressWarnings("PMD.UnusedFormalParameter")
     private synchronized void updateCertificates(WhatHappened what, Topic topic) {
-        logger.atInfo().kv("topic", topic.getName()).log("received config update");
+        if (WhatHappened.timestampUpdated.equals(what) || WhatHappened.interiorAdded.equals(what)) {
+            return;
+        }
         Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
-        List<String> caCerts = (List<String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
 
-        String serializedDeviceCerts = Coerce.toString(dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC));
-        TypeReference<HashMap<String, String>> typeRef = new TypeReference<HashMap<String, String>>() {};
+        String serializedDeviceCerts =
+            Coerce.toString(dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC));
+        if (serializedDeviceCerts == null) {
+            return;
+        }
+        TypeReference<HashMap<String, String>> typeRef = new TypeReference<HashMap<String, String>>() {
+        };
         Map<String, String> deviceCerts;
         try {
             deviceCerts = SerializerFactory.getFailSafeJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
@@ -124,6 +130,8 @@ public class MQTTService extends PluginService {
         }
 
         try {
+            List<String> caCerts =
+                (List<String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
             mqttBrokerKeyStore.updateCertificates(deviceCerts, caCerts);
         } catch (KeyStoreException | IOException | CertificateException e) {
             logger.atError().cause(e).log("failed to update device and CA certificates");
@@ -140,14 +148,13 @@ public class MQTTService extends PluginService {
         } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
             logger.atError().log("unable to generate broker certificate");
             serviceErrored(e);
+            return;
         }
 
         // Subscribe to CA and device certificate updates
         Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
-        dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC)
-            .subscribe(this::updateCertificates);
-        dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC)
-            .subscribe(this::updateCertificates);
+        dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).subscribe(this::updateCertificates);
+        dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).subscribe(this::updateCertificates);
 
         IConfig config = getDefaultConfig();
         ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
@@ -158,15 +165,18 @@ public class MQTTService extends PluginService {
 
     @Override
     public synchronized void shutdown() {
-        mqttBroker.stopServer();
-        serverRunning = false;
+        if (serverRunning) {
+            mqttBroker.stopServer();
+            serverRunning = false;
+        }
     }
 
     private synchronized void restartMqttServer() {
         if (serverRunning) {
             mqttBroker.stopServer();
             IConfig config = getDefaultConfig();
-            ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
+            ISslContextCreator sslContextCreator =
+                new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
             mqttBroker.startServer(config, null, sslContextCreator, authenticator, null);
         }
     }
