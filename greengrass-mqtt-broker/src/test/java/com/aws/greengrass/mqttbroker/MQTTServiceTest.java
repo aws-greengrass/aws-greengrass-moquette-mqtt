@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.mqttclient;
+package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.certificatemanager.CertificateManager;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
-import com.aws.greengrass.mqtt.MQTTService;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import io.moquette.BrokerConstants;
@@ -69,8 +68,9 @@ public class MQTTServiceTest extends GGServiceTestUtil {
         assertTrue(serviceRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
 
         // Connect to port 8883 just to confirm server is listening on port
-        Socket socket = new Socket("localhost", 8883);
-        socket.close();
+        try (Socket socket = new Socket("localhost", 8883)) {
+            // empty
+        }
     }
 
     @Test

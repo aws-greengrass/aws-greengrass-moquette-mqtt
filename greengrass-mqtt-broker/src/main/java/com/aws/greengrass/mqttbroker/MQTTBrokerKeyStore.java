@@ -3,16 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.mqtt;
+package com.aws.greengrass.mqttbroker;
+
 import com.aws.greengrass.certificatemanager.certificate.CertificateRequestGenerator;
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.util.Utils;
+import lombok.Getter;
+import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.ByteArrayInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
@@ -29,22 +36,23 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import lombok.Getter;
-import org.bouncycastle.operator.OperatorCreationException;
-
 public class MQTTBrokerKeyStore {
+    private static final Logger LOGGER = LogManager.getLogger(MQTTBrokerKeyStore.class);
     private static final String DEFAULT_BROKER_CN = "Greengrass MQTT";
     private static final String KEYSTORE_FILE_NAME = "keystore.jks";
     private static final String BROKER_KEY_ALIAS = "pk";
 
     private final Path rootPath;
-    @Getter private final String jksPath;
-    @Getter private final String jksPassword;
+    @Getter
+    private final String jksPath;
+    @Getter
+    private final String jksPassword;
     private KeyStore brokerKeyStore;
     private KeyPair brokerKeyPair;
 
     /**
-     * MQTTBrokerKeyStore constructor
+     * MQTTBrokerKeyStore constructor.
+     *
      * @param rootDir Directory to save KeyStore artifacts.
      */
     public MQTTBrokerKeyStore(Path rootDir) {
@@ -55,14 +63,13 @@ public class MQTTBrokerKeyStore {
 
     private static String generateRandomPassword(int length) {
         SecureRandom secureRandom = new SecureRandom();
-        return secureRandom.ints('!', 'z' + 1)
-            .limit(length)
-            .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-            .toString();
+        return secureRandom.ints('!', 'z' + 1).limit(length)
+            .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
     }
 
     /**
      * Initializes the MQTTBrokerKeyStore. Must be called prior to using.
+     *
      * @throws KeyStoreException Unable to initialize KeyStore.
      */
     public void initialize() throws KeyStoreException {
@@ -79,6 +86,7 @@ public class MQTTBrokerKeyStore {
         try {
             ks.load(null, jksPassword.toCharArray());
             brokerKeyStore = ks;
+            commit();
         } catch (IOException | NoSuchAlgorithmException | CertificateException e) {
             throw new KeyStoreException("unable to load broker keystore", e);
         }
@@ -86,39 +94,37 @@ public class MQTTBrokerKeyStore {
 
     /**
      * Generate CSR from KeyStore private key.
+     *
      * @return PEM encoded CSR string
-     * @throws IOException IOException
+     * @throws IOException               IOException
      * @throws OperatorCreationException OperatorCreationException
      */
     public String getCsr() throws IOException, OperatorCreationException {
-        return CertificateRequestGenerator.createCSR(brokerKeyPair,
-            DEFAULT_BROKER_CN,
-            null,
-            new ArrayList<>(Arrays.asList("localhost")));
+        return CertificateRequestGenerator
+            .createCSR(brokerKeyPair, DEFAULT_BROKER_CN, null, new ArrayList<>(Arrays.asList("localhost")));
     }
 
     /**
      * Update KeyStore key certificate.
+     *
      * @param certificate Updated certificate
      * @throws KeyStoreException If unable to set key entry.
      */
     public void updateServerCertificate(X509Certificate certificate) throws KeyStoreException {
         Certificate[] certChain = {certificate};
-        brokerKeyStore.setKeyEntry(BROKER_KEY_ALIAS,
-            brokerKeyPair.getPrivate(),
-            jksPassword.toCharArray(),
-            certChain);
+        brokerKeyStore.setKeyEntry(BROKER_KEY_ALIAS, brokerKeyPair.getPrivate(), jksPassword.toCharArray(), certChain);
 
         try {
             commit();
         } catch (IOException | CertificateException | NoSuchAlgorithmException e) {
             // TODO - properly handle this
-            e.printStackTrace();
+            LOGGER.atError().log(e);
         }
     }
 
     /**
      * Update KeyStore with the given CA and device certificates.
+     *
      * @param deviceCerts Map of device certificates
      * @param caCerts     List of CA certificates
      * @throws KeyStoreException    If unable to set key entries.
@@ -149,13 +155,13 @@ public class MQTTBrokerKeyStore {
             commit();
         } catch (IOException | CertificateException | NoSuchAlgorithmException e) {
             // TODO - properly handle this
-            e.printStackTrace();
+            LOGGER.atError().log(e);
         }
     }
 
     private void commit() throws IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException {
-        Files.createDirectories(rootPath);
-        try (FileOutputStream outputStream = new FileOutputStream(jksPath)) {
+        Utils.createPaths(rootPath);
+        try (OutputStream outputStream = Files.newOutputStream(Paths.get(jksPath))) {
             brokerKeyStore.store(outputStream, jksPassword.toCharArray());
         }
     }
