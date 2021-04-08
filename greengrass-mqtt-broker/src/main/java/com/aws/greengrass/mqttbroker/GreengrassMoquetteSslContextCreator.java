@@ -1,11 +1,26 @@
-package com.aws.greengrass.mqtt;
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package com.aws.greengrass.mqttbroker;
+
+import io.moquette.BrokerConstants;
+import io.moquette.broker.ISslContextCreator;
+import io.moquette.broker.config.IConfig;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Files;
 import java.security.GeneralSecurityException;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
@@ -16,19 +31,9 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.Objects;
-
-import io.moquette.BrokerConstants;
-import io.moquette.broker.ISslContextCreator;
-import io.moquette.broker.config.IConfig;
-import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
     private static final Logger LOG = LoggerFactory.getLogger(GreengrassMoquetteSslContextCreator.class);
@@ -72,9 +77,9 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
                     LOG.error("unsupported SSL provider {}", sslProvider);
                     return null;
             }
-            // if client authentification is enabled a trustmanager needs to be added to the ServerContext
-            String sNeedsClientAuth = props.getProperty(BrokerConstants.NEED_CLIENT_AUTH, "false");
-            if (Boolean.valueOf(sNeedsClientAuth)) {
+            // if client authentication is enabled a trustmanager needs to be added to the ServerContext
+            String needsClientAuth = props.getProperty(BrokerConstants.NEED_CLIENT_AUTH, "false");
+            if (Boolean.parseBoolean(needsClientAuth)) {
                 addClientAuthentication(ks, contextBuilder);
             }
             contextBuilder.sslProvider(sslProvider);
@@ -120,8 +125,8 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
     /**
      * The OpenSSL provider does not support the {@link KeyManagerFactory}, so we have to lookup the integration
      * certificate and key in order to provide it to OpenSSL.
-     * <p>
-     * TODO: SNI is currently not supported, we use only the first found private key.
+     *
+     * <p>TODO: SNI is currently not supported, we use only the first found private key.
      */
     private static SslContextBuilder builderWithOpenSSLProvider(KeyStore ks, String keyPassword)
         throws GeneralSecurityException {
@@ -140,14 +145,15 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
     private void addClientAuthentication(KeyStore ks, SslContextBuilder contextBuilder)
         throws NoSuchAlgorithmException, KeyStoreException {
         contextBuilder.clientAuth(ClientAuth.REQUIRE);
-        if (trustManager != null) {
-            contextBuilder.trustManager(trustManager);
-        } else {
+        if (trustManager == null) {
             LOG.warn("No trust manager present. The keystore will be used as a truststore.");
-            // use keystore as truststore, as integration needs to trust certificates signed by the integration certificates
+            // use keystore as truststore, as integration needs to trust certificates signed
+            // by the integration certificates
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             tmf.init(ks);
             contextBuilder.trustManager(tmf);
+        } else {
+            contextBuilder.trustManager(trustManager);
         }
     }
 
@@ -161,7 +167,7 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
         }
     }
 
-    private InputStream jksDatastore(String jksPath) throws FileNotFoundException {
+    private InputStream jksDatastore(String jksPath) throws IOException {
         URL jksUrl = getClass().getClassLoader().getResource(jksPath);
         if (jksUrl != null) {
             LOG.info("Starting with jks at {}, jks normal {}", jksUrl.toExternalForm(), jksUrl);
@@ -171,7 +177,7 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
         File jksFile = new File(jksPath);
         if (jksFile.exists()) {
             LOG.info("Loading external keystore. Url = {}.", jksFile.getAbsolutePath());
-            return new FileInputStream(jksFile);
+            return Files.newInputStream(jksFile.toPath());
         }
         throw new FileNotFoundException("The keystore file does not exist. Url = " + jksFile.getAbsolutePath());
     }
