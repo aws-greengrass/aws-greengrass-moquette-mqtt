@@ -12,6 +12,7 @@ import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
+import com.aws.greengrass.device.DeviceAuthClient;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.util.Coerce;
@@ -23,7 +24,6 @@ import io.moquette.broker.ISslContextCreator;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
-import io.moquette.broker.security.IAuthenticator;
 import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
@@ -36,8 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import javax.inject.Inject;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
@@ -54,23 +52,8 @@ public class MQTTService extends PluginService {
     private final Server mqttBroker = new Server();
     private final Kernel kernel;
     private final CertificateManager certificateManager;
-    private final IAuthenticator authenticator = new CertificateAuthenticator();
-    private final TrustManager allowAllTrustManager = new X509TrustManager() {
-        @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) {
-
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] x509Certificates, String s) {
-
-        }
-
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-            return new X509Certificate[0];
-        }
-    };
+    private final ClientDeviceTrustManager clientDeviceTrustManager;
+    private final ClientDeviceAuthorizer clientDeviceAuthorizer;
 
     private boolean serverRunning = false;
 
@@ -80,12 +63,17 @@ public class MQTTService extends PluginService {
      * @param topics             Root Configuration topic for this service
      * @param kernel             Greengrass Nucleus
      * @param certificateManager Client devices auth's certificate manager
+     * @param deviceAuthClient   Client device auth client
      */
     @Inject
-    public MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager) {
+    public MQTTService(Topics topics, Kernel kernel,
+                       CertificateManager certificateManager,
+                       DeviceAuthClient deviceAuthClient) {
         super(topics);
         this.kernel = kernel;
         this.certificateManager = certificateManager;
+        this.clientDeviceTrustManager = new ClientDeviceTrustManager(deviceAuthClient);
+        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDeviceTrustManager);
     }
 
     @Override
@@ -160,8 +148,9 @@ public class MQTTService extends PluginService {
             .subscribe(this::updateCertificates);
 
         IConfig config = getDefaultConfig();
-        ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
-        mqttBroker.startServer(config, null, sslContextCreator, authenticator, null);
+        ISslContextCreator sslContextCreator =
+            new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
+        mqttBroker.startServer(config, null, sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
         serverRunning = true;
         reportState(State.RUNNING);
     }
@@ -179,8 +168,8 @@ public class MQTTService extends PluginService {
             mqttBroker.stopServer();
             IConfig config = getDefaultConfig();
             ISslContextCreator sslContextCreator =
-                new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
-            mqttBroker.startServer(config, null, sslContextCreator, authenticator, null);
+                new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
+            mqttBroker.startServer(config, null, sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
         }
     }
 

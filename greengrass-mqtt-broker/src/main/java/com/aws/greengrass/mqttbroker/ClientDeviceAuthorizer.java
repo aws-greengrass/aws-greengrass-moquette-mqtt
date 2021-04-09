@@ -7,13 +7,21 @@ package com.aws.greengrass.mqttbroker;
 
 import io.moquette.broker.security.ClientData;
 import io.moquette.broker.security.IAuthenticator;
+import io.moquette.broker.security.IAuthorizatorPolicy;
+import io.moquette.broker.subscriptions.Topic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.security.cert.X509Certificate;
 
-public class CertificateAuthenticator implements IAuthenticator {
-    private static final Logger LOG = LoggerFactory.getLogger(CertificateAuthenticator.class);
+public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPolicy {
+    private static final Logger LOG = LoggerFactory.getLogger(ClientDeviceAuthorizer.class);
+    @SuppressWarnings("PMD.UnusedPrivateField")
+    private final ClientDeviceTrustManager trustManager;
+
+    public ClientDeviceAuthorizer(ClientDeviceTrustManager trustManager) {
+        this.trustManager = trustManager;
+    }
 
     @Override
     public boolean checkValid(ClientData clientData) {
@@ -31,6 +39,16 @@ public class CertificateAuthenticator implements IAuthenticator {
     @SuppressWarnings({"PMD.UnusedFormalParameter", "PMD.UseVarargs"})
     private boolean isCertificateValid(String clientId, X509Certificate[] certificateChain) {
         //TODO: cert validation logic
+        return true;
+    }
+
+    @Override
+    public boolean canWrite(Topic topic, String s, String s1) {
+        return true;
+    }
+
+    @Override
+    public boolean canRead(Topic topic, String s, String s1) {
         return true;
     }
 }
