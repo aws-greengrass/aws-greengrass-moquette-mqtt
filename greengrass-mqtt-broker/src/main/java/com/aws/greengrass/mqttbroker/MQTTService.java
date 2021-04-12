@@ -73,7 +73,7 @@ public class MQTTService extends PluginService {
         this.kernel = kernel;
         this.certificateManager = certificateManager;
         this.clientDeviceTrustManager = new ClientDeviceTrustManager(deviceAuthClient);
-        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDeviceTrustManager);
+        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDeviceTrustManager, deviceAuthClient);
     }
 
     @Override
