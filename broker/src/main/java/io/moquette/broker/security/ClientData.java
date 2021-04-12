@@ -16,14 +16,14 @@
 
 package io.moquette.broker.security;
 
-import javax.security.cert.X509Certificate;
+import java.security.cert.Certificate;
 import java.util.Optional;
 
 public class ClientData {
 
     private final String clientId;
     private Optional<String> username = Optional.empty();
-    private Optional<X509Certificate[]> certificateChain = Optional.empty();
+    private Optional<Certificate[]> certificateChain = Optional.empty();
     private Optional<byte[]> password = Optional.empty();
 
     public ClientData(String clientId) {
@@ -37,7 +37,7 @@ public class ClientData {
         this.username = Optional.ofNullable(username);
     }
 
-    public void setCertificateChain(X509Certificate[] certificateChain) {
+    public void setCertificateChain(Certificate[] certificateChain) {
         this.certificateChain = Optional.ofNullable(certificateChain);
     }
 
@@ -57,7 +57,7 @@ public class ClientData {
         return password;
     }
 
-    public Optional<X509Certificate[]> getCertificateChain() {
+    public Optional<Certificate[]> getCertificates() {
         return certificateChain;
     }
 }

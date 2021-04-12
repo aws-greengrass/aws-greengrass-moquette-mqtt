@@ -28,9 +28,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.security.cert.X509Certificate;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
+import java.security.cert.Certificate;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -165,7 +164,7 @@ final class MQTTConnection {
         SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
         if (sslhandler != null) {
             try {
-                X509Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificateChain();
+                Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificates();
                 clientData.setCertificateChain(certificateChain);
             } catch (SSLPeerUnverifiedException e) {
                 LOG.debug("Client didn't supply any certificate");
@@ -246,12 +245,12 @@ final class MQTTConnection {
     private boolean login(final ClientData clientData) {
         // handle user authentication
 
-        if (clientData.getCertificateChain().isPresent()) {
+        if (clientData.getCertificates().isPresent()) {
             if (authenticator.checkValid(clientData)) {
                 return true;
             } else {
                 LOG.error("Authenticator has rejected the MQTT credentials CId={}, certificate chain={}",
-                    clientData.getClientId(), clientData.getCertificateChain().get());
+                    clientData.getClientId(), clientData.getCertificates().get());
             }
         }
 

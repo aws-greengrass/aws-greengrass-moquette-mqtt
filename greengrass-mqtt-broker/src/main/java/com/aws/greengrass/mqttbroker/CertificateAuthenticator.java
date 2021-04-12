@@ -10,18 +10,18 @@ import io.moquette.broker.security.IAuthenticator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.cert.X509Certificate;
+import java.security.cert.X509Certificate;
 
 public class CertificateAuthenticator implements IAuthenticator {
     private static final Logger LOG = LoggerFactory.getLogger(CertificateAuthenticator.class);
 
     @Override
     public boolean checkValid(ClientData clientData) {
-        if (!clientData.getCertificateChain().isPresent()) {
+        if (!clientData.getCertificates().isPresent()) {
             LOG.error("No certificate in client data");
             return false;
         }
-        X509Certificate[] certificateChain = clientData.getCertificateChain().get();
+        X509Certificate[] certificateChain = (X509Certificate[]) clientData.getCertificates().get();
 
         String clientId = clientData.getClientId();
         LOG.info("Client with id {} provided X.509 certificate chain: {}", clientId, certificateChain);
