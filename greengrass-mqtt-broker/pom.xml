@@ -382,7 +382,7 @@
         <skipTests>false</skipTests>
         <excludedGroups></excludedGroups>
         <groups></groups>
-        <greengrassjar.name>aws.greengrass.MoquetteMqtt</greengrassjar.name>
+        <greengrassjar.name>aws.greengrass.clientdevices.Mqtt.Moquette</greengrassjar.name>
     </properties>
     <name>MoquetteMqtt</name>
 </project>
