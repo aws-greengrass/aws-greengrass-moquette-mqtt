@@ -8,19 +8,21 @@ package com.aws.greengrass.mqttbroker;
 import com.aws.greengrass.device.AuthorizationRequest;
 import com.aws.greengrass.device.DeviceAuthClient;
 import com.aws.greengrass.device.exception.AuthorizationException;
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 import io.moquette.broker.security.ClientData;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.Topic;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPolicy {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientDeviceAuthorizer.class);
+    private static final Logger LOG = LogManager.getLogger(ClientDeviceAuthorizer.class);
+    private static final String CLIENT_ID = "clientId";
+    private static final String SESSION_ID = "sessionId";
 
     private final ClientDeviceTrustManager trustManager;
     private final DeviceAuthClient deviceAuthClient;
@@ -48,17 +50,19 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         // Retrieve session ID and construct authorization request for MQTT CONNECT
         String sessionId = trustManager.getSessionForCertificate(certificateChain);
         String clientId = clientData.getClientId();
-        LOG.info("Retrieved session for clientId={}, sessionId={}", clientId, sessionId);
+        LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Retrieved client session");
 
         boolean canConnect = canDevicePerform(sessionId, clientId, "mqtt:connect", "mqtt:clientId:" + clientId);
 
         // Add mapping from client id to session id for future canRead/canWrite calls
         if (canConnect) {
-            LOG.info("Successfully authenticated client device. SessionID={}, ClientID={}", sessionId, clientId);
+            LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
+                .log("Successfully authenticated client device");
             clientToSessionMap.put(clientId, sessionId);
         } else {
             // TODO: Need to clean up this session since the device will be disconnected
-            LOG.info("Device not authorized to connect with clientId={}, sessionId={}", clientId, sessionId);
+            LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
+                .log("Device not authorized to connect");
         }
 
         return canConnect;
@@ -66,20 +70,23 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
     @Override
     public boolean canWrite(Topic topic, String user, String client) {
-        LOG.debug("canWrite({}, {}, {})", topic.toString(), user, client);
+        LOG.atDebug().kv("topic", topic).kv("user", user).kv(CLIENT_ID, client)
+            .log("MQTT publish request");
         return canDevicePerform(client, "mqtt:publish", "mqtt:topic:" + topic);
     }
 
     @Override
     public boolean canRead(Topic topic, String user, String client) {
-        LOG.debug("canRead({}, {}, {})", topic.toString(), user, client);
+        LOG.atDebug().kv("topic", topic).kv("user", user).kv(CLIENT_ID, client)
+            .log("MQTT subscribe request");
         return canDevicePerform(client, "mqtt:subscribe", "mqtt:topic:" + topic);
     }
 
     private boolean canDevicePerform(String client, String operation, String resource) {
         String sessionId = getSessionForClientId(client);
         if (sessionId == null) {
-            LOG.error("Unknown client request. Denying request");
+            LOG.atError().kv(CLIENT_ID, client).kv("operation", operation).kv("resource", resource)
+                .log("Unknown client request, denying request");
             return false;
         }
         return canDevicePerform(sessionId, client, operation, resource);
@@ -95,7 +102,8 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .build();
             return deviceAuthClient.canDevicePerform(authorizationRequest);
         } catch (AuthorizationException e) {
-            LOG.error("authorization exception occurred, session ID is invalid");
+            LOG.atError().kv(SESSION_ID, session).cause(e)
+                .log("session ID is invalid");
         }
         return false;
     }

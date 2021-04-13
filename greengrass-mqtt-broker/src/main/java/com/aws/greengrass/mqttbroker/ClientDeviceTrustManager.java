@@ -6,8 +6,8 @@
 package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.device.DeviceAuthClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateEncodingException;
@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.X509TrustManager;
 
 public class ClientDeviceTrustManager implements X509TrustManager {
-    private static final Logger LOG = LoggerFactory.getLogger(ClientDeviceTrustManager.class);
+    private static final Logger LOG = LogManager.getLogger(ClientDeviceTrustManager.class);
     private static final String BEGIN_CERT = "-----BEGIN CERTIFICATE-----";
     private static final String END_CERT = "-----END CERTIFICATE-----";
     private static final String LINE_SEPARATOR = System.getProperty("line.separator");
@@ -37,7 +37,7 @@ public class ClientDeviceTrustManager implements X509TrustManager {
         String certPem = x509CertificatesToPem(x509Certificates);
         String sessionId = sessionMap.computeIfAbsent(certPem, k -> createSession(certPem));
         if (sessionId == null) {
-            LOG.error("Unable to authenticate client device");
+            LOG.atError("Unable to authenticate client device");
             throw new CertificateException("Unable to authenticate client device");
         }
     }
@@ -65,7 +65,7 @@ public class ClientDeviceTrustManager implements X509TrustManager {
         try {
             certPem = x509CertificatesToPem(x509Certificates);
         } catch (CertificateEncodingException e) {
-            LOG.error("Unable to PEM encode x509Certificate");
+            LOG.atError().cause(e).log("Unable to PEM encode x509Certificate");
             return null;
         }
 
@@ -85,8 +85,8 @@ public class ClientDeviceTrustManager implements X509TrustManager {
         throws CertificateEncodingException {
         if (x509Certificates.length > 1) {
             // TODO: Support cert chains
-            LOG.error("Certificate chains are unsupported");
-            return "";
+            LOG.atError("Certificate chains are unsupported");
+            throw new CertificateEncodingException("certificate chains are unsupported");
         }
 
         return x509CertificateToPem(x509Certificates[0]);
