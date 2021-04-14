@@ -41,8 +41,8 @@ import javax.net.ssl.X509TrustManager;
 
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
-    public static final String SERVICE_NAME = "aws.greengrass.clientdevices.Mqtt.Moquette";
-    public static final String DCM_SERVICE_NAME = "aws.greengrass.CertificateManager";
+    public static final String SERVICE_NAME = "aws.greengrass.clientdevices.mqtt.Moquette";
+    public static final String DCM_SERVICE_NAME = "aws.greengrass.clientdevices.Auth";
 
     // Config Keys
     private static final String RUNTIME_CONFIG_KEY = "runtime";
