@@ -131,7 +131,8 @@ public class MQTTService extends PluginService {
 
         try {
             List<String> caCerts =
-                (List<String>) clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
+                (List<String>) clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY,
+                    AUTHORITIES_TOPIC).toPOJO();
             mqttBrokerKeyStore.updateCertificates(deviceCerts, caCerts);
         } catch (KeyStoreException | IOException | CertificateException e) {
             logger.atError().cause(e).log("failed to update device and CA certificates");
@@ -153,8 +154,10 @@ public class MQTTService extends PluginService {
 
         // Subscribe to CA and device certificate updates
         Topics clientDevicesAuthTopics = kernel.findServiceTopic(CLIENT_DEVICES_AUTH_SERVICE_NAME);
-        clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).subscribe(this::updateCertificates);
-        clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).subscribe(this::updateCertificates);
+        clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC)
+            .subscribe(this::updateCertificates);
+        clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC)
+            .subscribe(this::updateCertificates);
 
         IConfig config = getDefaultConfig();
         ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
