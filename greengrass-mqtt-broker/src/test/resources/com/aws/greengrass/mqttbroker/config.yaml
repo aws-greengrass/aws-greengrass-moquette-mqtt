@@ -5,10 +5,10 @@
 
 ---
 services:
-    aws.greengrass.clientdevices.Mqtt.Moquette: {}
-    aws.greengrass.CertificateManager: {}
+    aws.greengrass.clientdevices.mqtt.Moquette: {}
+    aws.greengrass.clientdevices.Auth: {}
     main:
         lifecycle:
             install: echo All installed
         dependencies:
-            - aws.greengrass.clientdevices.Mqtt.Moquette
+            - aws.greengrass.clientdevices.mqtt.Moquette

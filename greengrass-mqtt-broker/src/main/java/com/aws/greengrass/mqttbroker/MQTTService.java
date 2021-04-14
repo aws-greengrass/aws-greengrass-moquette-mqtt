@@ -41,8 +41,8 @@ import javax.net.ssl.X509TrustManager;
 
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
-    public static final String SERVICE_NAME = "aws.greengrass.clientdevices.Mqtt.Moquette";
-    public static final String DCM_SERVICE_NAME = "aws.greengrass.CertificateManager";
+    public static final String SERVICE_NAME = "aws.greengrass.clientdevices.mqtt.Moquette";
+    public static final String CLIENT_DEVICES_AUTH_SERVICE_NAME = "aws.greengrass.clientdevices.Auth";
 
     // Config Keys
     private static final String RUNTIME_CONFIG_KEY = "runtime";
@@ -79,7 +79,7 @@ public class MQTTService extends PluginService {
      *
      * @param topics             Root Configuration topic for this service
      * @param kernel             Greengrass Nucleus
-     * @param certificateManager DCM's certificate manager
+     * @param certificateManager Client devices auth's certificate manager
      */
     @Inject
     public MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager) {
@@ -112,10 +112,10 @@ public class MQTTService extends PluginService {
         if (WhatHappened.timestampUpdated.equals(what) || WhatHappened.interiorAdded.equals(what)) {
             return;
         }
-        Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
+        Topics clientDevicesAuthTopics = kernel.findServiceTopic(CLIENT_DEVICES_AUTH_SERVICE_NAME);
 
         String serializedDeviceCerts =
-            Coerce.toString(dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC));
+            Coerce.toString(clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC));
         if (serializedDeviceCerts == null) {
             return;
         }
@@ -131,7 +131,8 @@ public class MQTTService extends PluginService {
 
         try {
             List<String> caCerts =
-                (List<String>) dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).toPOJO();
+                (List<String>) clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY,
+                    AUTHORITIES_TOPIC).toPOJO();
             mqttBrokerKeyStore.updateCertificates(deviceCerts, caCerts);
         } catch (KeyStoreException | IOException | CertificateException e) {
             logger.atError().cause(e).log("failed to update device and CA certificates");
@@ -141,7 +142,7 @@ public class MQTTService extends PluginService {
 
     @Override
     public synchronized void startup() {
-        // Subscribe to DCM certificate updates
+        // Subscribe to client devices auth certificate updates
         try {
             String brokerCsr = mqttBrokerKeyStore.getCsr();
             certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
@@ -152,9 +153,11 @@ public class MQTTService extends PluginService {
         }
 
         // Subscribe to CA and device certificate updates
-        Topics dcmTopics = kernel.findServiceTopic(DCM_SERVICE_NAME);
-        dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC).subscribe(this::updateCertificates);
-        dcmTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC).subscribe(this::updateCertificates);
+        Topics clientDevicesAuthTopics = kernel.findServiceTopic(CLIENT_DEVICES_AUTH_SERVICE_NAME);
+        clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, AUTHORITIES_TOPIC)
+            .subscribe(this::updateCertificates);
+        clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY, DEVICES_TOPIC)
+            .subscribe(this::updateCertificates);
 
         IConfig config = getDefaultConfig();
         ISslContextCreator sslContextCreator = new GreengrassMoquetteSslContextCreator(config, allowAllTrustManager);
