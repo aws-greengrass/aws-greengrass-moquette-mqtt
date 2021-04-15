@@ -22,4 +22,8 @@ package io.moquette.broker.security;
 public interface IAuthenticator {
 
     boolean checkValid(ClientData clientData);
+
+    default void postDisconnect(String clientId) {
+        // doing nothing
+    }
 }

@@ -69,6 +69,19 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     }
 
     @Override
+    public void postDisconnect(String clientId) {
+        String sessionId = getSessionForClientId(clientId);
+        if (sessionId != null) {
+            try {
+                deviceAuthClient.closeSession(sessionId);
+            } catch (AuthorizationException e) {
+                LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("session is already closed");
+            }
+            clientToSessionMap.remove(clientId, sessionId);
+        }
+    }
+
+    @Override
     public boolean canWrite(Topic topic, String user, String client) {
         LOG.atDebug().kv("topic", topic).kv("user", user).kv(CLIENT_ID, client)
             .log("MQTT publish request");
@@ -108,7 +121,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         return false;
     }
 
-    protected String getSessionForClientId(String clientId) {
+    String getSessionForClientId(String clientId) {
         return clientToSessionMap.getOrDefault(clientId, null);
     }
 }

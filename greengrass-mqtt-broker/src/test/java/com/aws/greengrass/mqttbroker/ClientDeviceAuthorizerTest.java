@@ -21,6 +21,7 @@ import java.security.cert.X509Certificate;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -187,5 +188,36 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         assertThat(authorizer.canWrite(Topic.asTopic(topic1), "", client2), is(false));
         assertThat(authorizer.canRead(Topic.asTopic(topic2), "", client2), is(true));
         assertThat(authorizer.canWrite(Topic.asTopic(topic2), "", client2), is(true));
+    }
+
+    @Test
+    void GIVEN_authorizedClient_WHEN_postConnect_THEN_closeDCASession() throws AuthorizationException {
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
+        ClientData clientData = new ClientData(DEFAULT_CLIENT);
+        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
+
+        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        configureConnectResponse(true);
+
+        assertThat(authorizer.checkValid(clientData), is(true));
+        authorizer.postDisconnect(DEFAULT_CLIENT);
+        verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
+        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), nullValue());
+    }
+
+    @Test
+    void GIVEN_authorizedClient_WHEN_postConnect_and_sessionAlreadyClosed_THEN_failSafe() throws AuthorizationException {
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
+        ClientData clientData = new ClientData(DEFAULT_CLIENT);
+        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
+
+        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        configureConnectResponse(true);
+        doThrow(AuthorizationException.class).when(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
+
+        assertThat(authorizer.checkValid(clientData), is(true));
+        authorizer.postDisconnect(DEFAULT_CLIENT);
+        verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
+        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), nullValue());
     }
 }

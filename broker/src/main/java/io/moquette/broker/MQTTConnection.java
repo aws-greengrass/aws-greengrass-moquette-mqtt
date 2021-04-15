@@ -289,6 +289,7 @@ final class MQTTConnection {
         } else {
             sessionRegistry.disconnect(clientID);
         }
+        authenticator.postDisconnect(clientID);
         connected = false;
         //dispatch connection lost to intercept.
         String userName = NettyUtils.userName(channel);
@@ -318,6 +319,7 @@ final class MQTTConnection {
             return;
         }
         sessionRegistry.disconnect(clientID);
+        authenticator.postDisconnect(clientID);
         connected = false;
         channel.close().addListener(FIRE_EXCEPTION_ON_FAILURE);
         LOG.trace("Processed DISCONNECT CId={}, channel: {}", clientID, channel);
