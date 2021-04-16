@@ -192,7 +192,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_authorizedClient_WHEN_onDisconnect_THEN_closeDCASession() throws AuthorizationException {
+    void GIVEN_authorizedClient_WHEN_onDisconnect_THEN_closeCDASession() throws AuthorizationException {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
         ClientData clientData = new ClientData(DEFAULT_CLIENT);
         clientData.setCertificateChain(new X509Certificate[]{mockCertificate});

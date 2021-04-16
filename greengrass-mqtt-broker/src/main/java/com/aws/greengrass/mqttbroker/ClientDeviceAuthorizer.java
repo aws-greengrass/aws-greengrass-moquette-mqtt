@@ -72,7 +72,6 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .log("Successfully authenticated client device");
             clientToSessionMap.put(clientId, sessionId);
         } else {
-            // TODO: Need to clean up this session since the device will be disconnected
             LOG.atInfo()
                 .kv(CLIENT_ID, clientId)
                 .kv(SESSION_ID, sessionId)
@@ -159,6 +158,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         private void closeAuthSession(String clientId) {
             String sessionId = getSessionForClientId(clientId);
             if (sessionId != null) {
+                LOG.atDebug().kv(SESSION_ID, sessionId).log("Close auth session");
                 try {
                     deviceAuthClient.closeSession(sessionId);
                 } catch (AuthorizationException e) {
