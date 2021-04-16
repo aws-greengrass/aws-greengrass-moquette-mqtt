@@ -146,11 +146,13 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
         @Override
         public void onDisconnect(InterceptDisconnectMessage msg) {
+            LOG.atDebug().kv(CLIENT_ID, msg.getClientID()).log("On disconnect auth session handling");
             closeAuthSession(msg.getClientID());
         }
 
         @Override
         public void onConnectionLost(InterceptConnectionLostMessage msg) {
+            LOG.atDebug().kv(CLIENT_ID, msg.getClientID()).log("On connection lost auth session handling");
             closeAuthSession(msg.getClientID());
         }
 
