@@ -79,7 +79,8 @@ public class MQTTService extends PluginService {
     @Override
     protected void install() {
         try {
-            mqttBrokerKeyStore = new MQTTBrokerKeyStore(kernel.getNucleusPaths().workPath(SERVICE_NAME));
+            mqttBrokerKeyStore = new MQTTBrokerKeyStore(kernel.getNucleusPaths()
+                .workPath(SERVICE_NAME));
             mqttBrokerKeyStore.initialize();
         } catch (IOException | KeyStoreException e) {
             serviceErrored(e);
@@ -90,7 +91,9 @@ public class MQTTService extends PluginService {
         try {
             mqttBrokerKeyStore.updateServerCertificate(cert);
         } catch (KeyStoreException e) {
-            logger.atError().cause(e).log("failed to update MQTT server certificate");
+            logger.atError()
+                .cause(e)
+                .log("failed to update MQTT server certificate");
         }
         restartMqttServer();
     }
@@ -111,19 +114,25 @@ public class MQTTService extends PluginService {
         };
         Map<String, String> deviceCerts;
         try {
-            deviceCerts = SerializerFactory.getFailSafeJsonObjectMapper().readValue(serializedDeviceCerts, typeRef);
+            deviceCerts = SerializerFactory.getFailSafeJsonObjectMapper()
+                .readValue(serializedDeviceCerts, typeRef);
         } catch (JsonProcessingException e) {
-            logger.atError().cause(e).log("failed to parse device certificates");
+            logger.atError()
+                .cause(e)
+                .log("failed to parse device certificates");
             deviceCerts = Collections.emptyMap();
         }
 
         try {
             List<String> caCerts =
                 (List<String>) clientDevicesAuthTopics.lookup(RUNTIME_CONFIG_KEY, CERTIFICATES_KEY,
-                    AUTHORITIES_TOPIC).toPOJO();
+                    AUTHORITIES_TOPIC)
+                    .toPOJO();
             mqttBrokerKeyStore.updateCertificates(deviceCerts, caCerts);
         } catch (KeyStoreException | IOException | CertificateException e) {
-            logger.atError().cause(e).log("failed to update device and CA certificates");
+            logger.atError()
+                .cause(e)
+                .log("failed to update device and CA certificates");
         }
         restartMqttServer();
     }
@@ -135,7 +144,8 @@ public class MQTTService extends PluginService {
             String brokerCsr = mqttBrokerKeyStore.getCsr();
             certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
         } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
-            logger.atError().log("unable to generate broker certificate");
+            logger.atError()
+                .log("unable to generate broker certificate");
             serviceErrored(e);
             return;
         }
@@ -150,7 +160,9 @@ public class MQTTService extends PluginService {
         IConfig config = getDefaultConfig();
         ISslContextCreator sslContextCreator =
             new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-        mqttBroker.startServer(config, null, sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
+        mqttBroker.startServer(config,
+            Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener()), sslContextCreator,
+            clientDeviceAuthorizer, clientDeviceAuthorizer);
         serverRunning = true;
         reportState(State.RUNNING);
     }

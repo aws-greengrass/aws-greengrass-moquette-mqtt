@@ -12,6 +12,7 @@ import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import io.moquette.broker.security.ClientData;
 import io.moquette.broker.subscriptions.Topic;
+import io.moquette.interception.messages.InterceptDisconnectMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -200,7 +201,9 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configureConnectResponse(true);
 
         assertThat(authorizer.checkValid(clientData), is(true));
-        authorizer.postDisconnect(DEFAULT_CLIENT);
+
+        authorizer.new ConnectionTerminationListener()
+            .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, null));
         verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
         assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), nullValue());
     }
@@ -216,7 +219,9 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         doThrow(AuthorizationException.class).when(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
 
         assertThat(authorizer.checkValid(clientData), is(true));
-        authorizer.postDisconnect(DEFAULT_CLIENT);
+
+        authorizer.new ConnectionTerminationListener()
+            .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, null));
         verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
         assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), nullValue());
     }
