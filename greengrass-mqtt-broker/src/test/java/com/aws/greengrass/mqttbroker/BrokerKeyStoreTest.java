@@ -16,22 +16,22 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.file.Path;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class MQTTBrokerKeyStoreTest {
+public class BrokerKeyStoreTest {
     @TempDir
     Path rootDir;
 
-    private MQTTBrokerKeyStore mqttBrokerKeyStore;
+    private BrokerKeyStore brokerKeyStore;
 
     @BeforeEach
     public void setup() {
-        mqttBrokerKeyStore = new MQTTBrokerKeyStore(rootDir);
+        brokerKeyStore = new BrokerKeyStore(rootDir);
     }
 
     @Test
-    void GIVEN_MQTTBrokerKeyStore_WHEN_getKeyStore_called_THEN_basic_keystore_generated() {
-        Assertions.assertNotEquals("", mqttBrokerKeyStore.getJksPassword(),
+    void GIVEN_BrokerKeyStore_WHEN_getKeyStore_THEN_encryptedJksCreated() {
+        Assertions.assertNotEquals("", brokerKeyStore.getJksPassword(),
             "keystore password should not be empty");
-        Assertions.assertEquals(rootDir.resolve("keystore.jks").toString(), mqttBrokerKeyStore.getJksPath(),
+        Assertions.assertEquals(rootDir.resolve("keystore.jks").toString(), brokerKeyStore.getJksPath(),
             "keystore should be created in the root dir");
     }
 
