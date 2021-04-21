@@ -15,16 +15,21 @@ import io.moquette.broker.subscriptions.Topic;
 import io.moquette.interception.messages.InterceptDisconnectMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.security.cert.X509Certificate;
 
+import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
@@ -105,6 +110,20 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configureConnectResponse(true);
 
         assertThat(authorizer.checkValid(clientData), is(true));
+    }
+
+    @Test
+    void GIVEN_cdaAuthorizationThrowIAE_WHEN_checkValid_THEN_returnsFalse(ExtensionContext context) throws AuthorizationException {
+        ignoreExceptionOfType(context, IllegalArgumentException.class);
+
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
+        ClientData clientData = new ClientData(DEFAULT_CLIENT);
+        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
+
+        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockDeviceAuthClient.canDevicePerform(any())).thenThrow(IllegalArgumentException.class);
+
+        assertThat(authorizer.checkValid(clientData), is(false));
     }
 
     @Test

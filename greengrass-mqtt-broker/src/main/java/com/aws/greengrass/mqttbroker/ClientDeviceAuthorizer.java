@@ -123,6 +123,9 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .resource(resource)
                 .build();
             return deviceAuthClient.canDevicePerform(authorizationRequest);
+        } catch (IllegalArgumentException e) {
+            LOG.atError().kv(CLIENT_ID, client)
+                .cause(e).log("client id is invalid thing name");
         } catch (AuthorizationException e) {
             LOG.atError()
                 .kv(SESSION_ID, session)
