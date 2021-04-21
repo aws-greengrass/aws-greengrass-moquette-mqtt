@@ -114,6 +114,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         return canDevicePerform(sessionId, client, operation, resource);
     }
 
+    @SuppressWarnings("PMD.AvoidCatchingGenericException")
     private boolean canDevicePerform(String session, String client, String operation, String resource) {
         try {
             AuthorizationRequest authorizationRequest = AuthorizationRequest.builder()
@@ -123,14 +124,14 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .resource(resource)
                 .build();
             return deviceAuthClient.canDevicePerform(authorizationRequest);
-        } catch (IllegalArgumentException e) {
-            LOG.atError().kv(CLIENT_ID, client)
-                .cause(e).log("client id is invalid thing name");
         } catch (AuthorizationException e) {
             LOG.atError()
                 .kv(SESSION_ID, session)
                 .cause(e)
                 .log("session ID is invalid");
+        } catch (Exception e) {
+            LOG.atError().kv(SESSION_ID, session).kv(CLIENT_ID, client)
+                .cause(e).log("error occurred when authorizing client device");
         }
         return false;
     }
