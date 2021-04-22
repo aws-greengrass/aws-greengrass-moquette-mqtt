@@ -58,8 +58,7 @@ public class ClientDeviceTrustManager implements X509TrustManager {
      * @param x509Certificates certificate chain
      * @return a session id
      */
-    @SuppressWarnings("PMD.UseVarargs")
-    public String getSessionForCertificate(X509Certificate[] x509Certificates) {
+    public String getSessionForCertificate(X509Certificate... x509Certificates) {
         String certPem = null;
 
         try {
@@ -80,16 +79,14 @@ public class ClientDeviceTrustManager implements X509TrustManager {
         return deviceAuthClient.createSession(certPem);
     }
 
-    @SuppressWarnings("PMD.UseVarargs")
-    private static String x509CertificatesToPem(X509Certificate[] x509Certificates)
+    private static String x509CertificatesToPem(X509Certificate... x509Certificates)
         throws CertificateEncodingException {
-        if (x509Certificates.length > 1) {
-            // TODO: Support cert chains
-            LOG.atError("Certificate chains are unsupported");
-            throw new CertificateEncodingException("certificate chains are unsupported");
+        StringBuilder stringBuilder = new StringBuilder();
+        for (X509Certificate certificate : x509Certificates) {
+            stringBuilder.append(x509CertificateToPem(certificate));
+            stringBuilder.append(LINE_SEPARATOR);
         }
-
-        return x509CertificateToPem(x509Certificates[0]);
+        return stringBuilder.toString();
     }
 
     private static String x509CertificateToPem(X509Certificate x509Certificate) throws CertificateEncodingException {
