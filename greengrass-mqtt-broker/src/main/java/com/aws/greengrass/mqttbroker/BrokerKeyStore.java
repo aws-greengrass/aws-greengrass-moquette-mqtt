@@ -14,6 +14,7 @@ import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
@@ -30,6 +31,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -98,19 +100,22 @@ public class BrokerKeyStore {
      * @throws OperatorCreationException OperatorCreationException
      */
     public String getCsr() throws IOException, OperatorCreationException {
-        return CertificateRequestGenerator
-            .createCSR(jksKeyPair, DEFAULT_BROKER_CN, null, getHostIpAddresses());
+        return CertificateRequestGenerator.createCSR(jksKeyPair, DEFAULT_BROKER_CN,
+            getHostIpAddresses(), new ArrayList<>(Arrays.asList("localhost")));
     }
 
     //TODO delete me after beta release
-    private List<String> getHostIpAddresses() throws SocketException {
-        List<String> ipAddresses = new ArrayList<>();
+    private List<InetAddress> getHostIpAddresses() throws SocketException {
+        List<InetAddress> ipAddresses = new ArrayList<>();
         Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
         while (networkInterfaces.hasMoreElements()) {
             NetworkInterface ni = networkInterfaces.nextElement();
             Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
             while (inetAddresses.hasMoreElements()) {
-                ipAddresses.add(inetAddresses.nextElement().getHostAddress());
+                InetAddress inetAddress = inetAddresses.nextElement();
+                if (inetAddress instanceof Inet4Address) {
+                    ipAddresses.add(inetAddress);
+                }
             }
         }
         return Collections.unmodifiableList(ipAddresses);
