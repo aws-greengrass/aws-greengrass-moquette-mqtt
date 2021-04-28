@@ -132,6 +132,7 @@ public class MQTTService extends PluginService {
         defaultConfig.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
         defaultConfig.setProperty(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, "false");
         defaultConfig.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
+        defaultConfig.setProperty(BrokerConstants.IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME, "true");
 
         //Disable plain TCP port
         defaultConfig.setProperty(BrokerConstants.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);
