@@ -14,6 +14,9 @@ import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,7 +30,9 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
 
 public class BrokerKeyStore {
     private static final Logger LOGGER = LogManager.getLogger(BrokerKeyStore.class);
@@ -94,7 +99,21 @@ public class BrokerKeyStore {
      */
     public String getCsr() throws IOException, OperatorCreationException {
         return CertificateRequestGenerator
-            .createCSR(jksKeyPair, DEFAULT_BROKER_CN, null, new ArrayList<>(Arrays.asList("localhost")));
+            .createCSR(jksKeyPair, DEFAULT_BROKER_CN, null, getHostIpAddresses());
+    }
+
+    //TODO delete me after beta release
+    private List<String> getHostIpAddresses() throws SocketException {
+        List<String> ipAddresses = new ArrayList<>();
+        Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
+        while (networkInterfaces.hasMoreElements()) {
+            NetworkInterface ni = networkInterfaces.nextElement();
+            Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
+            while (inetAddresses.hasMoreElements()) {
+                ipAddresses.add(inetAddresses.nextElement().getHostAddress());
+            }
+        }
+        return Collections.unmodifiableList(ipAddresses);
     }
 
     /**
