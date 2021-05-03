@@ -117,7 +117,9 @@ public class MQTTService extends PluginService {
             IConfig config = getDefaultConfig();
             ISslContextCreator sslContextCreator =
                 new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-            mqttBroker.startServer(config, null, sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
+            mqttBroker.startServer(config,
+                Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener()),
+                sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
         }
     }
 
