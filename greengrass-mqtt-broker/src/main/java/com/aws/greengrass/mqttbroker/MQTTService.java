@@ -18,12 +18,14 @@ import io.moquette.broker.ISslContextCreator;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
+import io.moquette.interception.InterceptHandler;
 import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
 import java.security.KeyStoreException;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import javax.inject.Inject;
 
@@ -37,6 +39,7 @@ public class MQTTService extends PluginService {
     private final CertificateManager certificateManager;
     private final ClientDeviceTrustManager clientDeviceTrustManager;
     private final ClientDeviceAuthorizer clientDeviceAuthorizer;
+    private final List<InterceptHandler> interceptHandlers;
 
     private boolean serverRunning = false;
 
@@ -57,6 +60,7 @@ public class MQTTService extends PluginService {
         this.certificateManager = certificateManager;
         this.clientDeviceTrustManager = new ClientDeviceTrustManager(deviceAuthClient);
         this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDeviceTrustManager, deviceAuthClient);
+        this.interceptHandlers = Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener());
     }
 
     @Override
@@ -96,8 +100,7 @@ public class MQTTService extends PluginService {
         IConfig config = getDefaultConfig();
         ISslContextCreator sslContextCreator =
             new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-        mqttBroker.startServer(config,
-            Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener()), sslContextCreator,
+        mqttBroker.startServer(config, interceptHandlers, sslContextCreator,
             clientDeviceAuthorizer, clientDeviceAuthorizer);
         serverRunning = true;
         reportState(State.RUNNING);
@@ -117,7 +120,8 @@ public class MQTTService extends PluginService {
             IConfig config = getDefaultConfig();
             ISslContextCreator sslContextCreator =
                 new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-            mqttBroker.startServer(config, null, sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
+            mqttBroker.startServer(config, interceptHandlers,
+                sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
         }
     }
 
