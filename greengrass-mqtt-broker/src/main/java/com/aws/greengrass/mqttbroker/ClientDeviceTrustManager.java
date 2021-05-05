@@ -6,6 +6,7 @@
 package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.device.DeviceAuthClient;
+import com.aws.greengrass.device.exception.AuthenticationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 
@@ -22,6 +23,7 @@ public class ClientDeviceTrustManager implements X509TrustManager {
     private static final Logger LOG = LogManager.getLogger(ClientDeviceTrustManager.class);
     private static final String BEGIN_CERT = "-----BEGIN CERTIFICATE-----";
     private static final String END_CERT = "-----END CERTIFICATE-----";
+    private static final String CERTIFICATE_PEM = "certificatePem";
     private static final String LINE_SEPARATOR = System.getProperty("line.separator");
 
     private final DeviceAuthClient deviceAuthClient;
@@ -76,7 +78,15 @@ public class ClientDeviceTrustManager implements X509TrustManager {
     }
 
     private String createSession(String certPem) {
-        return deviceAuthClient.createSession(certPem);
+        try {
+            return deviceAuthClient.createSession(certPem);
+        } catch (AuthenticationException e) {
+            LOG.atError()
+                .cause(e)
+                .kv(CERTIFICATE_PEM, certPem)
+                .log("Can't authenticate certificate");
+            return null;
+        }
     }
 
     private static String x509CertificatesToPem(X509Certificate... x509Certificates)
