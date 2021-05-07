@@ -82,6 +82,14 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
             if (Boolean.parseBoolean(needsClientAuth)) {
                 addClientAuthentication(ks, contextBuilder);
             }
+
+            // if enabled tls protocols are not provided, we use the default
+            String enabledTLSProtocols = props.getProperty(BrokerConstants.NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME);
+            if (enabledTLSProtocols != null) {
+                LOG.info(String.format("Enabled TLS Protocols: {%s}", enabledTLSProtocols));
+                contextBuilder.protocols(enabledTLSProtocols.split(";"));
+            }
+
             contextBuilder.sslProvider(sslProvider);
             SslContext sslContext = contextBuilder.build();
             LOG.info("The SSL context has been initialized successfully.");
