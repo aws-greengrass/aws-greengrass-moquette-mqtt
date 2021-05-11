@@ -7,6 +7,7 @@ package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.device.AuthorizationRequest;
 import com.aws.greengrass.device.DeviceAuthClient;
+import com.aws.greengrass.device.exception.AuthenticationException;
 import com.aws.greengrass.device.exception.AuthorizationException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
@@ -15,11 +16,13 @@ import io.moquette.broker.subscriptions.Topic;
 import io.moquette.interception.messages.InterceptDisconnectMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.security.cert.X509Certificate;
 
+import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
@@ -41,10 +44,9 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     private static final String DEFAULT_CLIENT = "clientId";
     private static final String DEFAULT_TOPIC = "topic";
 
-    void configureAuthResponse(String session, String clientId, String operation, String resource, boolean doAllow) throws AuthorizationException {
+    void configureAuthResponse(String session, String operation, String resource, boolean doAllow) throws AuthorizationException {
         AuthorizationRequest authorizationRequest = AuthorizationRequest.builder()
             .sessionId(session)
-            .clientId(clientId)
             .operation(operation)
             .resource(resource)
             .build();
@@ -53,27 +55,27 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     void configureConnectResponse(String session, String clientId, boolean doAllow) throws AuthorizationException {
-        configureAuthResponse(session, clientId, "mqtt:connect", "mqtt:clientId:" + clientId, doAllow);
+        configureAuthResponse(session, "mqtt:connect", "mqtt:clientId:" + clientId, doAllow);
     }
 
     void configureConnectResponse(boolean doAllow) throws AuthorizationException {
         configureConnectResponse(DEFAULT_SESSION, DEFAULT_CLIENT, doAllow);
     }
 
-    void configurePublishResponse(String session, String clientId, String topic, boolean doAllow) throws AuthorizationException {
-        configureAuthResponse(session, clientId, "mqtt:publish", "mqtt:topic:" + topic, doAllow);
+    void configurePublishResponse(String session, String topic, boolean doAllow) throws AuthorizationException {
+        configureAuthResponse(session, "mqtt:publish", "mqtt:topic:" + topic, doAllow);
     }
 
     void configurePublishResponse(boolean doAllow) throws AuthorizationException {
-        configurePublishResponse(DEFAULT_SESSION, DEFAULT_CLIENT, DEFAULT_TOPIC, doAllow);
+        configurePublishResponse(DEFAULT_SESSION, DEFAULT_TOPIC, doAllow);
     }
 
-    void configureSubscribeResponse(String session, String clientId, String topic, boolean doAllow) throws AuthorizationException {
-        configureAuthResponse(session, clientId, "mqtt:subscribe", "mqtt:topic:" + topic, doAllow);
+    void configureSubscribeResponse(String session, String topic, boolean doAllow) throws AuthorizationException {
+        configureAuthResponse(session, "mqtt:subscribe", "mqtt:topic:" + topic, doAllow);
     }
 
     void configureSubscribeResponse(boolean doAllow) throws AuthorizationException {
-        configureSubscribeResponse(DEFAULT_SESSION, DEFAULT_CLIENT, DEFAULT_TOPIC, doAllow);
+        configureSubscribeResponse(DEFAULT_SESSION, DEFAULT_TOPIC, doAllow);
     }
 
     @Test
@@ -84,7 +86,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalse() throws AuthorizationException {
+    void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalse() throws Exception {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
         ClientData clientData = new ClientData(DEFAULT_CLIENT);
         clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
@@ -93,10 +95,11 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configureConnectResponse(false);
 
         assertThat(authorizer.checkValid(clientData), is(false));
+        verify(mockDeviceAuthClient).attachThing(DEFAULT_SESSION, DEFAULT_CLIENT);
     }
 
     @Test
-    void GIVEN_authorizedClient_WHEN_checkValid_THEN_returnsTrue() throws AuthorizationException {
+    void GIVEN_authorizedClient_WHEN_checkValid_THEN_returnsTrue() throws Exception {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
         ClientData clientData = new ClientData(DEFAULT_CLIENT);
         clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
@@ -105,6 +108,20 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configureConnectResponse(true);
 
         assertThat(authorizer.checkValid(clientData), is(true));
+        verify(mockDeviceAuthClient).attachThing(DEFAULT_SESSION, DEFAULT_CLIENT);
+    }
+
+    @Test
+    void GIVEN_attachThingThrowsException_WHEN_checkValid_THEN_returnsFalse(ExtensionContext context) throws Exception {
+        ignoreExceptionOfType(context, AuthenticationException.class);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
+        ClientData clientData = new ClientData(DEFAULT_CLIENT);
+        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
+
+        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        doThrow(AuthenticationException.class).when(mockDeviceAuthClient).attachThing(DEFAULT_SESSION, DEFAULT_CLIENT);
+
+        assertThat(authorizer.checkValid(clientData), is(false));
     }
 
     @Test
@@ -166,18 +183,18 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         // Client1 can connect and publish/subscribe on own topic, but not client2's topics
         when(mockTrustManager.getSessionForCertificate(chain1)).thenReturn(session1);
         configureConnectResponse(session1, client1, true);
-        configurePublishResponse(session1, client1, topic1, true);
-        configureSubscribeResponse(session1, client1, topic1, true);
-        configurePublishResponse(session1, client1, topic2, false);
-        configureSubscribeResponse(session1, client1, topic2, false);
+        configurePublishResponse(session1, topic1, true);
+        configureSubscribeResponse(session1, topic1, true);
+        configurePublishResponse(session1, topic2, false);
+        configureSubscribeResponse(session1, topic2, false);
 
         // Client2 can connect and publish/subscribe on own topic, but not client1's topics
         when(mockTrustManager.getSessionForCertificate(chain2)).thenReturn(session2);
         configureConnectResponse(session2, client2, true);
-        configurePublishResponse(session2, client2, topic1, false);
-        configureSubscribeResponse(session2, client2, topic1, false);
-        configurePublishResponse(session2, client2, topic2, true);
-        configureSubscribeResponse(session2, client2, topic2, true);
+        configurePublishResponse(session2, topic1, false);
+        configureSubscribeResponse(session2, topic1, false);
+        configurePublishResponse(session2, topic2, true);
+        configureSubscribeResponse(session2, topic2, true);
 
         assertThat(authorizer.checkValid(clientData1), is(true));
         assertThat(authorizer.checkValid(clientData2), is(true));

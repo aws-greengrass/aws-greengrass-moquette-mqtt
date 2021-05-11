@@ -7,6 +7,7 @@ package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.device.AuthorizationRequest;
 import com.aws.greengrass.device.DeviceAuthClient;
+import com.aws.greengrass.device.exception.AuthenticationException;
 import com.aws.greengrass.device.exception.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
@@ -62,6 +63,18 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             .kv(SESSION_ID, sessionId)
             .log("Retrieved client session");
 
+        try {
+            deviceAuthClient.attachThing(sessionId, clientId);
+        } catch (AuthenticationException e) {
+            LOG.atError()
+                .cause(e)
+                .kv(CLIENT_ID, clientId)
+                .kv(SESSION_ID, sessionId)
+                .log("Can't attach thing to auth session");
+            // TODO allow process continue once we allow more attribute matching than thingName
+            return false;
+        }
+
         boolean canConnect = canDevicePerform(sessionId, clientId, "mqtt:connect", "mqtt:clientId:" + clientId);
 
         // Add mapping from client id to session id for future canRead/canWrite calls
@@ -102,8 +115,11 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     }
 
     private boolean canDevicePerform(String client, String operation, String resource) {
-        String sessionId = getSessionForClientId(client);
-        if (sessionId == null) {
+        return canDevicePerform(getSessionForClientId(client), client, operation, resource);
+    }
+
+    private boolean canDevicePerform(String session, String client, String operation, String resource) {
+        if (session == null) {
             LOG.atError()
                 .kv(CLIENT_ID, client)
                 .kv("operation", operation)
@@ -111,14 +127,10 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .log("Unknown client request, denying request");
             return false;
         }
-        return canDevicePerform(sessionId, client, operation, resource);
-    }
 
-    private boolean canDevicePerform(String session, String client, String operation, String resource) {
         try {
             AuthorizationRequest authorizationRequest = AuthorizationRequest.builder()
                 .sessionId(session)
-                .clientId(client)
                 .operation(operation)
                 .resource(resource)
                 .build();

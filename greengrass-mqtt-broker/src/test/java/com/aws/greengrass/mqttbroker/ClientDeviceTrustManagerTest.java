@@ -6,11 +6,13 @@
 package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.device.DeviceAuthClient;
+import com.aws.greengrass.device.exception.AuthenticationException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,6 +21,7 @@ import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
+import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -36,7 +39,7 @@ public class ClientDeviceTrustManagerTest extends GGServiceTestUtil {
     DeviceAuthClient mockDeviceAuthClient;
 
     @Test
-    void GIVEN_nonEncodableCertificate_WHEN_checkClientTrusted_THEN_CertificateExceptionThrown() throws CertificateEncodingException {
+    void GIVEN_nonEncodableCertificate_WHEN_checkClientTrusted_THEN_CertificateExceptionThrown() throws Exception {
         when(mockCertificate.getEncoded()).thenThrow(new CertificateEncodingException("Couldn't encode certificate"));
         ClientDeviceTrustManager trustManager = new ClientDeviceTrustManager(mockDeviceAuthClient);
         Assertions.assertThrows(CertificateException.class,
@@ -44,7 +47,7 @@ public class ClientDeviceTrustManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_encodableCertificate_WHEN_checkClientTrust_THEN_noExceptionThrown() throws CertificateException {
+    void GIVEN_encodableCertificate_WHEN_checkClientTrust_THEN_noExceptionThrown() throws Exception {
         when(mockCertificate.getEncoded()).thenReturn(new byte[]{0});
         when(mockDeviceAuthClient.createSession(anyString())).thenReturn("session_id");
         ClientDeviceTrustManager trustManager = new ClientDeviceTrustManager(mockDeviceAuthClient);
@@ -52,16 +55,18 @@ public class ClientDeviceTrustManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_unauthenticatedCertificate_WHEN_checkClientTrust_THEN_CertificateExceptionThrown() throws CertificateEncodingException {
+    void GIVEN_unauthenticatedCertificate_WHEN_checkClientTrust_THEN_CertificateExceptionThrown(ExtensionContext context)
+        throws Exception {
+        ignoreExceptionOfType(context, AuthenticationException.class);
         when(mockCertificate.getEncoded()).thenReturn(new byte[]{0});
-        when(mockDeviceAuthClient.createSession(anyString())).thenReturn(null);
+        when(mockDeviceAuthClient.createSession(anyString())).thenThrow(AuthenticationException.class);
         ClientDeviceTrustManager trustManager = new ClientDeviceTrustManager(mockDeviceAuthClient);
         Assertions.assertThrows(CertificateException.class,
             () -> trustManager.checkClientTrusted(new X509Certificate[]{mockCertificate}, "RSA"));
     }
 
     @Test
-    void GIVEN_singleConnection_WHEN_getSessionForCertificate_THEN_sessionCreatedAndReturned() throws CertificateException {
+    void GIVEN_singleConnection_WHEN_getSessionForCertificate_THEN_sessionCreatedAndReturned() throws Exception {
         when(mockCertificate.getEncoded()).thenReturn(new byte[]{0});
         when(mockDeviceAuthClient.createSession(anyString())).thenReturn("SESSION-ID");
         ClientDeviceTrustManager trustManager = new ClientDeviceTrustManager(mockDeviceAuthClient);
@@ -77,7 +82,7 @@ public class ClientDeviceTrustManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_twoConnectionsWithSameCert_WHEN_getSessionForCertificate_THEN_sessionIsCreatedOnDemand() throws CertificateException {
+    void GIVEN_twoConnectionsWithSameCert_WHEN_getSessionForCertificate_THEN_sessionIsCreatedOnDemand() throws Exception {
         when(mockCertificate.getEncoded()).thenReturn(new byte[]{0});
         when(mockDeviceAuthClient.createSession(anyString())).thenReturn("SESSION-ID");
 
@@ -97,7 +102,7 @@ public class ClientDeviceTrustManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_twoConnectionsWithUniqueCerts_WHEN_checkClientTrusted_THEN_twoSessionsCreated() throws CertificateException {
+    void GIVEN_twoConnectionsWithUniqueCerts_WHEN_checkClientTrusted_THEN_twoSessionsCreated() throws Exception {
         X509Certificate mockCertificate2 = Mockito.mock(X509Certificate.class);
         when(mockCertificate.getEncoded()).thenReturn(new byte[]{0});
         when(mockCertificate2.getEncoded()).thenReturn(new byte[]{1});
