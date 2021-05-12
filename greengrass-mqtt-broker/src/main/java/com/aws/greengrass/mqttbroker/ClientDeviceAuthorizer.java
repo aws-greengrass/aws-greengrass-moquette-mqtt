@@ -111,7 +111,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             .kv("user", user)
             .kv(CLIENT_ID, client)
             .log("MQTT subscribe request");
-        return canDevicePerform(client, "mqtt:subscribe", "mqtt:topic:" + topic);
+        return canDevicePerform(client, "mqtt:subscribe", "mqtt:topicfilter:" + topic);
     }
 
     private boolean canDevicePerform(String client, String operation, String resource) {
