@@ -71,7 +71,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     void configureSubscribeResponse(String session, String topic, boolean doAllow) throws AuthorizationException {
-        configureAuthResponse(session, "mqtt:subscribe", "mqtt:topic:" + topic, doAllow);
+        configureAuthResponse(session, "mqtt:subscribe", "mqtt:topicfilter:" + topic, doAllow);
     }
 
     void configureSubscribeResponse(boolean doAllow) throws AuthorizationException {
