@@ -88,6 +88,9 @@ public final class BrokerConstants {
     public static final String NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME = "netty.channel.read.limit";
     public static final int DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES = 512 * 1024;
 
+    public static final int FLIGHT_BEFORE_RESEND_MS = 5_000;
+    public static final int INFLIGHT_WINDOW_SIZE = 10;
+
     private BrokerConstants() {
     }
 }
