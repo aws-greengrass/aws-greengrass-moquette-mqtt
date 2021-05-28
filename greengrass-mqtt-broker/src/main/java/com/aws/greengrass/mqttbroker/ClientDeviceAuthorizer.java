@@ -85,7 +85,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 if (v == null) {
                     return sessionId;
                 } else {
-                    LOG.atWarn().kv(CLIENT_ID, v).kv(CLIENT_ID, sessionId)
+                    LOG.atWarn().kv(CLIENT_ID, clientId).kv("Session 1", k).kv("Session 2", sessionId)
                         .log("Duplicate client ID detected. Closing both auth sessions");
                     closeSession(v);
                     closeSession(sessionId);
