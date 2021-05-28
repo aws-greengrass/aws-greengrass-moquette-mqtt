@@ -44,14 +44,11 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     private static final String DEFAULT_CLIENT = "clientId";
     private static final String DEFAULT_TOPIC = "topic";
 
-    void configureAuthResponse(String session, String operation, String resource, boolean doAllow) throws AuthorizationException {
-        AuthorizationRequest authorizationRequest = AuthorizationRequest.builder()
-            .sessionId(session)
-            .operation(operation)
-            .resource(resource)
-            .build();
-        when(mockDeviceAuthClient.canDevicePerform(authorizationRequest))
-            .thenReturn(doAllow);
+    void configureAuthResponse(String session, String operation, String resource, boolean doAllow)
+        throws AuthorizationException {
+        AuthorizationRequest authorizationRequest =
+            AuthorizationRequest.builder().sessionId(session).operation(operation).resource(resource).build();
+        when(mockDeviceAuthClient.canDevicePerform(authorizationRequest)).thenReturn(doAllow);
     }
 
     void configureConnectResponse(String session, String clientId, boolean doAllow) throws AuthorizationException {
@@ -190,7 +187,8 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_twoClientsWithDifferingPermissions_WHEN_canReadCanWrite_THEN_correctSessionIsUsed() throws AuthorizationException {
+    void GIVEN_twoClientsWithDifferingPermissions_WHEN_canReadCanWrite_THEN_correctSessionIsUsed()
+        throws AuthorizationException {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
         String session1 = "SESSION_ID1";
         String session2 = "SESSION_ID2";
@@ -251,7 +249,8 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_authorizedClient_WHEN_onDisconnect_and_sessionAlreadyClosed_THEN_failSafe() throws AuthorizationException {
+    void GIVEN_authorizedClient_WHEN_onDisconnect_and_sessionAlreadyClosed_THEN_failSafe()
+        throws AuthorizationException {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
         ClientData clientData = new ClientData(DEFAULT_CLIENT);
         clientData.setCertificateChain(new X509Certificate[]{mockCertificate});

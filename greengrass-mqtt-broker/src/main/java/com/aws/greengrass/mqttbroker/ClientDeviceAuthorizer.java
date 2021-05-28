@@ -47,29 +47,21 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
     @Override
     public boolean checkValid(ClientData clientData) {
-        if (!clientData.getCertificates()
-            .isPresent()) {
+        if (!clientData.getCertificates().isPresent()) {
             LOG.error("No certificate in client data");
             return false;
         }
-        X509Certificate[] certificateChain = (X509Certificate[]) clientData.getCertificates()
-            .get();
+        X509Certificate[] certificateChain = (X509Certificate[]) clientData.getCertificates().get();
 
         // Retrieve session ID and construct authorization request for MQTT CONNECT
         String sessionId = trustManager.getSessionForCertificate(certificateChain);
         String clientId = clientData.getClientId();
-        LOG.atInfo()
-            .kv(CLIENT_ID, clientId)
-            .kv(SESSION_ID, sessionId)
-            .log("Retrieved client session");
+        LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Retrieved client session");
 
         try {
             deviceAuthClient.attachThing(sessionId, clientId);
         } catch (AuthenticationException e) {
-            LOG.atWarn()
-                .cause(e)
-                .kv(CLIENT_ID, clientId)
-                .kv(SESSION_ID, sessionId)
+            LOG.atWarn().cause(e).kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
                 .log("Can't attach thing to auth session. Is Thing connecting using it's ThingName as ClientID?");
         }
 
@@ -77,9 +69,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
         // Add mapping from client id to session id for future canRead/canWrite calls
         if (canConnect) {
-            LOG.atInfo()
-                .kv(CLIENT_ID, clientId)
-                .kv(SESSION_ID, sessionId)
+            LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
                 .log("Successfully authenticated client device");
 
             // Logic for handling duplicate client IDs is unintuitive. Here, we will return true
@@ -95,9 +85,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 if (v == null) {
                     return sessionId;
                 } else {
-                    LOG.atWarn()
-                        .kv(CLIENT_ID, v)
-                        .kv(CLIENT_ID, sessionId)
+                    LOG.atWarn().kv(CLIENT_ID, v).kv(CLIENT_ID, sessionId)
                         .log("Duplicate client ID detected. Closing both auth sessions");
                     closeSession(v);
                     closeSession(sessionId);
@@ -105,10 +93,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 }
             });
         } else {
-            LOG.atInfo()
-                .kv(CLIENT_ID, clientId)
-                .kv(SESSION_ID, sessionId)
-                .log("Device not authorized to connect");
+            LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device not authorized to connect");
             closeSession(sessionId);
         }
 
@@ -117,21 +102,13 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
     @Override
     public boolean canWrite(Topic topic, String user, String client) {
-        LOG.atDebug()
-            .kv("topic", topic)
-            .kv("user", user)
-            .kv(CLIENT_ID, client)
-            .log("MQTT publish request");
+        LOG.atDebug().kv("topic", topic).kv("user", user).kv(CLIENT_ID, client).log("MQTT publish request");
         return canDevicePerform(client, "mqtt:publish", "mqtt:topic:" + topic);
     }
 
     @Override
     public boolean canRead(Topic topic, String user, String client) {
-        LOG.atDebug()
-            .kv("topic", topic)
-            .kv("user", user)
-            .kv(CLIENT_ID, client)
-            .log("MQTT subscribe request");
+        LOG.atDebug().kv("topic", topic).kv("user", user).kv(CLIENT_ID, client).log("MQTT subscribe request");
         return canDevicePerform(client, "mqtt:subscribe", "mqtt:topicfilter:" + topic);
     }
 
@@ -139,10 +116,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         try {
             deviceAuthClient.closeSession(sessionId);
         } catch (AuthorizationException e) {
-            LOG.atWarn()
-                .cause(e)
-                .kv(SESSION_ID, sessionId)
-                .log("Failed to close session");
+            LOG.atWarn().cause(e).kv(SESSION_ID, sessionId).log("Failed to close session");
         }
     }
 
@@ -152,26 +126,17 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
     private boolean canDevicePerform(String session, String client, String operation, String resource) {
         if (session == null) {
-            LOG.atError()
-                .kv(CLIENT_ID, client)
-                .kv("operation", operation)
-                .kv("resource", resource)
+            LOG.atError().kv(CLIENT_ID, client).kv("operation", operation).kv("resource", resource)
                 .log("Unknown client request, denying request");
             return false;
         }
 
         try {
-            AuthorizationRequest authorizationRequest = AuthorizationRequest.builder()
-                .sessionId(session)
-                .operation(operation)
-                .resource(resource)
-                .build();
+            AuthorizationRequest authorizationRequest =
+                AuthorizationRequest.builder().sessionId(session).operation(operation).resource(resource).build();
             return deviceAuthClient.canDevicePerform(authorizationRequest);
         } catch (AuthorizationException e) {
-            LOG.atError()
-                .kv(SESSION_ID, session)
-                .cause(e)
-                .log("session ID is invalid");
+            LOG.atError().kv(SESSION_ID, session).cause(e).log("session ID is invalid");
         }
         return false;
     }
@@ -206,10 +171,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 try {
                     deviceAuthClient.closeSession(sessionId);
                 } catch (AuthorizationException e) {
-                    LOG.atWarn()
-                        .kv(CLIENT_ID, clientId)
-                        .kv(SESSION_ID, sessionId)
-                        .log("session is already closed");
+                    LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("session is already closed");
                 }
                 clientToSessionMap.remove(clientId, sessionId);
             }

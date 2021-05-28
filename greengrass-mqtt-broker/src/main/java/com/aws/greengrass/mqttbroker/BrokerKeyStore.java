@@ -100,8 +100,8 @@ public class BrokerKeyStore {
      * @throws OperatorCreationException OperatorCreationException
      */
     public String getCsr() throws IOException, OperatorCreationException {
-        return CertificateRequestGenerator.createCSR(jksKeyPair, DEFAULT_BROKER_CN,
-            getHostIpAddresses(), new ArrayList<>(Arrays.asList("localhost")));
+        return CertificateRequestGenerator.createCSR(jksKeyPair, DEFAULT_BROKER_CN, getHostIpAddresses(),
+            new ArrayList<>(Arrays.asList("localhost")));
     }
 
     //TODO delete me after beta release

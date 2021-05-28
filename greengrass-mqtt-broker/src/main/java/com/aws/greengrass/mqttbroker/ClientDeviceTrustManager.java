@@ -81,10 +81,7 @@ public class ClientDeviceTrustManager implements X509TrustManager {
         try {
             return deviceAuthClient.createSession(certPem);
         } catch (AuthenticationException e) {
-            LOG.atError()
-                .cause(e)
-                .kv(CERTIFICATE_PEM, certPem)
-                .log("Can't authenticate certificate");
+            LOG.atError().cause(e).kv(CERTIFICATE_PEM, certPem).log("Can't authenticate certificate");
             return null;
         }
     }
