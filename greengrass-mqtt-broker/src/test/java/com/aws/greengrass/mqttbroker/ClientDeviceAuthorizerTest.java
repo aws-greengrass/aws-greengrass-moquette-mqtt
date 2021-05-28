@@ -86,7 +86,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalse() throws Exception {
+    void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalseAndClosesSession() throws Exception {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
         ClientData clientData = new ClientData(DEFAULT_CLIENT);
         clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
@@ -96,6 +96,31 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
 
         assertThat(authorizer.checkValid(clientData), is(false));
         verify(mockDeviceAuthClient).attachThing(DEFAULT_SESSION, DEFAULT_CLIENT);
+        verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
+    }
+
+    @Test
+    void GIVEN_duplicateClientIds_WHEN_checkValid_THEN_bothSessionsClosed() throws AuthorizationException {
+        // This test can be removed once we identify a better way to map
+        // client connections to auth sessions. See comments in the checkValid
+        // method surrounding duplicate client IDs for more details
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
+        ClientData clientData = new ClientData(DEFAULT_CLIENT);
+        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
+
+        when(mockTrustManager.getSessionForCertificate(any())).thenReturn("SESSION1");
+        configureConnectResponse("SESSION1", DEFAULT_CLIENT, true);
+        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), is("SESSION1"));
+
+        // Second client should return true, but both sessions should be closed
+        when(mockTrustManager.getSessionForCertificate(any())).thenReturn("SESSION2");
+        configureConnectResponse("SESSION2", DEFAULT_CLIENT, true);
+        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), is(nullValue()));
+
+        verify(mockDeviceAuthClient).closeSession("SESSION1");
+        verify(mockDeviceAuthClient).closeSession("SESSION2");
     }
 
     @Test

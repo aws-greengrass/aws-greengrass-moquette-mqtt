@@ -66,13 +66,11 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         try {
             deviceAuthClient.attachThing(sessionId, clientId);
         } catch (AuthenticationException e) {
-            LOG.atError()
+            LOG.atWarn()
                 .cause(e)
                 .kv(CLIENT_ID, clientId)
                 .kv(SESSION_ID, sessionId)
-                .log("Can't attach thing to auth session");
-            // TODO allow process continue once we allow more attribute matching than thingName
-            return false;
+                .log("Can't attach thing to auth session. Is Thing connecting using it's ThingName as ClientID?");
         }
 
         boolean canConnect = canDevicePerform(sessionId, clientId, "mqtt:connect", "mqtt:clientId:" + clientId);
@@ -83,12 +81,35 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .kv(CLIENT_ID, clientId)
                 .kv(SESSION_ID, sessionId)
                 .log("Successfully authenticated client device");
-            clientToSessionMap.put(clientId, sessionId);
+
+            // Logic for handling duplicate client IDs is unintuitive. Here, we will return true
+            // so Moquette will disconnect the old connection and allow the new connection. However,
+            // after returning, there is a short period of time where authZ or disconnect callbacks
+            // for a given client ID could map to one of two sessions and we have no way of knowing
+            // which to use.
+            // In order to avoid subtle races and potential privilege escalation, we close both auth
+            // sessions. Unfortunately, this means that the next authZ call for the newly connecting
+            // client will fail and the client will be disconnected. This is non-ideal, but safe.
+            // The client can simply reconnect and everything will work.
+            clientToSessionMap.compute(clientId, (k, v) -> {
+                if (v == null) {
+                    return sessionId;
+                } else {
+                    LOG.atWarn()
+                        .kv(CLIENT_ID, v)
+                        .kv(CLIENT_ID, sessionId)
+                        .log("Duplicate client ID detected. Closing both auth sessions");
+                    closeSession(v);
+                    closeSession(sessionId);
+                    return null;
+                }
+            });
         } else {
             LOG.atInfo()
                 .kv(CLIENT_ID, clientId)
                 .kv(SESSION_ID, sessionId)
                 .log("Device not authorized to connect");
+            closeSession(sessionId);
         }
 
         return canConnect;
@@ -112,6 +133,17 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             .kv(CLIENT_ID, client)
             .log("MQTT subscribe request");
         return canDevicePerform(client, "mqtt:subscribe", "mqtt:topicfilter:" + topic);
+    }
+
+    private void closeSession(String sessionId) {
+        try {
+            deviceAuthClient.closeSession(sessionId);
+        } catch (AuthorizationException e) {
+            LOG.atWarn()
+                .cause(e)
+                .kv(SESSION_ID, sessionId)
+                .log("Failed to close session");
+        }
     }
 
     private boolean canDevicePerform(String client, String operation, String resource) {
@@ -170,7 +202,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         private void closeAuthSession(String clientId) {
             String sessionId = getSessionForClientId(clientId);
             if (sessionId != null) {
-                LOG.atDebug().kv(SESSION_ID, sessionId).log("Close auth session");
+                LOG.atDebug().kv(SESSION_ID, sessionId).log("Closing auth session");
                 try {
                     deviceAuthClient.closeSession(sessionId);
                 } catch (AuthorizationException e) {
