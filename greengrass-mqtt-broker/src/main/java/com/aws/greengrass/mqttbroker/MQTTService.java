@@ -52,8 +52,7 @@ public class MQTTService extends PluginService {
      * @param deviceAuthClient   Client device auth client
      */
     @Inject
-    public MQTTService(Topics topics, Kernel kernel,
-                       CertificateManager certificateManager,
+    public MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager,
                        DeviceAuthClient deviceAuthClient) {
         super(topics);
         this.kernel = kernel;
@@ -77,9 +76,7 @@ public class MQTTService extends PluginService {
         try {
             brokerKeyStore.updateServerCertificate(cert);
         } catch (KeyStoreException e) {
-            logger.atError()
-                .cause(e)
-                .log("failed to update MQTT server certificate");
+            logger.atError().cause(e).log("failed to update MQTT server certificate");
         }
         restartMqttServer();
     }
@@ -91,8 +88,7 @@ public class MQTTService extends PluginService {
             String brokerCsr = brokerKeyStore.getCsr();
             certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
         } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
-            logger.atError()
-                .log("unable to generate broker certificate");
+            logger.atError().log("unable to generate broker certificate");
             serviceErrored(e);
             return;
         }
@@ -100,8 +96,8 @@ public class MQTTService extends PluginService {
         IConfig config = getDefaultConfig();
         ISslContextCreator sslContextCreator =
             new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-        mqttBroker.startServer(config, interceptHandlers, sslContextCreator,
-            clientDeviceAuthorizer, clientDeviceAuthorizer);
+        mqttBroker
+            .startServer(config, interceptHandlers, sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
         serverRunning = true;
         reportState(State.RUNNING);
     }
@@ -120,8 +116,8 @@ public class MQTTService extends PluginService {
             IConfig config = getDefaultConfig();
             ISslContextCreator sslContextCreator =
                 new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-            mqttBroker.startServer(config, interceptHandlers,
-                sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
+            mqttBroker.startServer(config, interceptHandlers, sslContextCreator, clientDeviceAuthorizer,
+                clientDeviceAuthorizer);
         }
     }
 

@@ -55,8 +55,8 @@ public class ClientDeviceTrustManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_unauthenticatedCertificate_WHEN_checkClientTrust_THEN_CertificateExceptionThrown(ExtensionContext context)
-        throws Exception {
+    void GIVEN_unauthenticatedCertificate_WHEN_checkClientTrust_THEN_CertificateExceptionThrown(
+        ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, AuthenticationException.class);
         when(mockCertificate.getEncoded()).thenReturn(new byte[]{0});
         when(mockDeviceAuthClient.createSession(anyString())).thenThrow(AuthenticationException.class);
@@ -82,7 +82,8 @@ public class ClientDeviceTrustManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_twoConnectionsWithSameCert_WHEN_getSessionForCertificate_THEN_sessionIsCreatedOnDemand() throws Exception {
+    void GIVEN_twoConnectionsWithSameCert_WHEN_getSessionForCertificate_THEN_sessionIsCreatedOnDemand()
+        throws Exception {
         when(mockCertificate.getEncoded()).thenReturn(new byte[]{0});
         when(mockDeviceAuthClient.createSession(anyString())).thenReturn("SESSION-ID");
 
