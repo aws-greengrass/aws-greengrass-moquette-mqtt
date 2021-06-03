@@ -62,7 +62,8 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             deviceAuthClient.attachThing(sessionId, clientId);
         } catch (AuthenticationException e) {
             LOG.atWarn().cause(e).kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
-                .log("Can't attach thing to auth session. Is Thing connecting using it's ThingName as ClientID?");
+                .log("Can't attach thing to auth session. Check that the thing connects using its thing name as the "
+                    + "client ID.");
         }
 
         boolean canConnect = canDevicePerform(sessionId, clientId, "mqtt:connect", "mqtt:clientId:" + clientId);
@@ -86,14 +87,14 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                     return sessionId;
                 } else {
                     LOG.atWarn().kv(CLIENT_ID, clientId).kv("Session 1", v).kv("Session 2", sessionId)
-                        .log("Duplicate client ID detected. Closing both auth sessions");
+                        .log("Duplicate client ID detected. Closing both auth sessions.");
                     closeSession(v);
                     closeSession(sessionId);
                     return null;
                 }
             });
         } else {
-            LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device not authorized to connect");
+            LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device isn't authorized to connect");
             closeSession(sessionId);
         }
 
@@ -136,7 +137,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 AuthorizationRequest.builder().sessionId(session).operation(operation).resource(resource).build();
             return deviceAuthClient.canDevicePerform(authorizationRequest);
         } catch (AuthorizationException e) {
-            LOG.atError().kv(SESSION_ID, session).cause(e).log("session ID is invalid");
+            LOG.atError().kv(SESSION_ID, session).cause(e).log("Session ID is invalid");
         }
         return false;
     }
@@ -171,7 +172,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 try {
                     deviceAuthClient.closeSession(sessionId);
                 } catch (AuthorizationException e) {
-                    LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("session is already closed");
+                    LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Session is already closed");
                 }
                 clientToSessionMap.remove(clientId, sessionId);
             }

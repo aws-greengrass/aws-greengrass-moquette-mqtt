@@ -74,7 +74,7 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
                     contextBuilder = builderWithOpenSSLProvider(ks, keyPassword);
                     break;
                 default:
-                    LOG.error("unsupported SSL provider {}", sslProvider);
+                    LOG.error("Unsupported SSL provider {}", sslProvider);
                     return null;
             }
             // if client authentication is enabled a trustmanager needs to be added to the ServerContext
@@ -86,13 +86,13 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
             // if enabled tls protocols are not provided, we use the default
             String enabledTLSProtocols = props.getProperty(BrokerConstants.NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME);
             if (enabledTLSProtocols != null) {
-                LOG.info(String.format("Enabled TLS Protocols: {%s}", enabledTLSProtocols));
+                LOG.info(String.format("Enabled TLS protocols: {%s}", enabledTLSProtocols));
                 contextBuilder.protocols(enabledTLSProtocols.split(";"));
             }
 
             contextBuilder.sslProvider(sslProvider);
             SslContext sslContext = contextBuilder.build();
-            LOG.info("The SSL context has been initialized successfully.");
+            LOG.info("SSL context successfully initialized.");
             return sslContext;
         } catch (GeneralSecurityException | IOException ex) {
             LOG.error("Unable to initialize SSL context.", ex);
@@ -147,7 +147,7 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
                 return SslContextBuilder.forServer(key, certChain);
             }
         }
-        throw new KeyManagementException("the SSL key-store does not contain a private key");
+        throw new KeyManagementException("The SSL keystore does not contain a private key");
     }
 
     private void addClientAuthentication(KeyStore ks, SslContextBuilder contextBuilder)
@@ -170,7 +170,7 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
         try {
             return SslProvider.valueOf(providerName);
         } catch (IllegalArgumentException e) {
-            LOG.warn("unknown SSL Provider {}, falling back on JDK provider", providerName);
+            LOG.warn("Unknown SSL provider {}, falling back to JDK provider", providerName);
             return SslProvider.JDK;
         }
     }
@@ -178,15 +178,15 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
     private InputStream jksDatastore(String jksPath) throws IOException {
         URL jksUrl = getClass().getClassLoader().getResource(jksPath);
         if (jksUrl != null) {
-            LOG.info("Starting with jks at {}, jks normal {}", jksUrl.toExternalForm(), jksUrl);
+            LOG.info("Starting with JKS at {}, JKS normal {}", jksUrl.toExternalForm(), jksUrl);
             return getClass().getClassLoader().getResourceAsStream(jksPath);
         }
-        LOG.warn("No keystore has been found in the bundled resources. Scanning filesystem...");
+        LOG.warn("No keystore found in the bundled resources. Scanning filesystem...");
         File jksFile = new File(jksPath);
         if (jksFile.exists()) {
-            LOG.info("Loading external keystore. Url = {}.", jksFile.getAbsolutePath());
+            LOG.info("Loading external keystore. URL = {}.", jksFile.getAbsolutePath());
             return Files.newInputStream(jksFile.toPath());
         }
-        throw new FileNotFoundException("The keystore file does not exist. Url = " + jksFile.getAbsolutePath());
+        throw new FileNotFoundException("The keystore file does not exist. URL = " + jksFile.getAbsolutePath());
     }
 }

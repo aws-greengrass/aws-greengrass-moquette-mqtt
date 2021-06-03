@@ -66,7 +66,7 @@ public class ClientDeviceTrustManager implements X509TrustManager {
         try {
             certPem = x509CertificatesToPem(x509Certificates);
         } catch (CertificateEncodingException e) {
-            LOG.atError().cause(e).log("Unable to PEM encode x509Certificate");
+            LOG.atError().cause(e).log("Unable to PEM encode X.509 certificate");
             return null;
         }
 

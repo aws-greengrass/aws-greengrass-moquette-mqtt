@@ -76,7 +76,7 @@ public class MQTTService extends PluginService {
         try {
             brokerKeyStore.updateServerCertificate(cert);
         } catch (KeyStoreException e) {
-            logger.atError().cause(e).log("failed to update MQTT server certificate");
+            logger.atError().cause(e).log("Failed to update MQTT broker certificate");
         }
         restartMqttServer();
     }
@@ -88,7 +88,7 @@ public class MQTTService extends PluginService {
             String brokerCsr = brokerKeyStore.getCsr();
             certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
         } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
-            logger.atError().log("unable to generate broker certificate");
+            logger.atError().log("Unable to generate MQTT broker certificate");
             serviceErrored(e);
             return;
         }
