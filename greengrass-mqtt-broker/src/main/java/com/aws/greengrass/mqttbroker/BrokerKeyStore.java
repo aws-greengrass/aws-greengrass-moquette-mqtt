@@ -79,7 +79,7 @@ public class BrokerKeyStore {
             kpg.initialize(2048);
             jksKeyPair = kpg.generateKeyPair();
         } catch (NoSuchAlgorithmException e) {
-            throw new KeyStoreException("unable to generate keypair for broker key store", e);
+            throw new KeyStoreException("Unable to generate keypair for broker key store", e);
         }
 
         KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
@@ -88,7 +88,7 @@ public class BrokerKeyStore {
             jks = ks;
             commit();
         } catch (IOException | NoSuchAlgorithmException | CertificateException e) {
-            throw new KeyStoreException("unable to load broker keystore", e);
+            throw new KeyStoreException("Unable to load broker keystore", e);
         }
     }
 
