@@ -39,6 +39,18 @@ import java.util.stream.Collectors;
 public class SessionRegistry {
 
     public abstract static class EnqueuedMessage {
+
+        /**
+         * Releases any held resources. Must be called when the EnqueuedMessage is no
+         * longer needed.
+         */
+        public void release() {}
+
+        /**
+         * Retains any held resources. Must be called when the EnqueuedMessage is added
+         * to a store.
+         */
+        public void retain() {}
     }
 
     static class PublishedMessage extends EnqueuedMessage {
@@ -52,6 +64,29 @@ public class SessionRegistry {
             this.publishingQos = publishingQos;
             this.payload = payload;
         }
+
+        public Topic getTopic() {
+            return topic;
+        }
+
+        public MqttQoS getPublishingQos() {
+            return publishingQos;
+        }
+
+        public ByteBuf getPayload() {
+            return payload;
+        }
+
+        @Override
+        public void release() {
+            payload.release();
+        }
+
+        @Override
+        public void retain() {
+            payload.retain();
+        }
+
     }
 
     static final class PubRelMarker extends EnqueuedMessage {
