@@ -80,6 +80,11 @@ public final class BrokerConstants {
 
     public static final String STORAGE_CLASS_NAME = "storage_class";
 
+    public static final String NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME = "netty.channel.write.limit";
+    public static final int DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES = 512 * 1024;
+    public static final String NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME = "netty.channel.read.limit";
+    public static final int DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES = 512 * 1024;
+
     private BrokerConstants() {
     }
 }
