@@ -107,7 +107,7 @@ public class MQTTMessageLogger extends ChannelDuplexHandler {
             case PUBREL:
             case PUBACK:
             case UNSUBACK:
-                LOG.info("{} {} <{}> packetID <{}>", direction, messageType, clientID, messageId(msg));
+                LOG.debug("{} {} <{}> packetID <{}>", direction, messageType, clientID, messageId(msg));
                 break;
             case SUBACK:
                 MqttSubAckMessage suback = (MqttSubAckMessage) msg;
