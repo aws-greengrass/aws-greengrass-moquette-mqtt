@@ -16,29 +16,35 @@
 
 package io.moquette.integration;
 
+import static io.moquette.BrokerConstants.FLIGHT_BEFORE_RESEND_MS;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
 import io.moquette.testclient.Client;
 import io.netty.handler.codec.mqtt.*;
 import io.netty.handler.codec.mqtt.MqttMessage;
+import org.awaitility.Durations;
 import org.eclipse.paho.client.mqttv3.*;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.awaitility.Awaitility;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import static org.junit.jupiter.api.Assertions.*;
 
-public class ServerLowlevelMessagesIntegrationTests {
+public class ServerLowlevelMessagesIntegrationTest {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ServerLowlevelMessagesIntegrationTests.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ServerLowlevelMessagesIntegrationTest.class);
     static MqttClientPersistence s_dataStore;
     Server m_server;
     Client m_client;
@@ -47,29 +53,36 @@ public class ServerLowlevelMessagesIntegrationTests {
     IConfig m_config;
     MqttMessage receivedMsg;
 
-    protected void startServer() throws IOException {
+    @TempDir
+    Path tempFolder;
+
+    protected void startServer(String dbPath) throws IOException {
         m_server = new Server();
-        final Properties configProps = IntegrationUtils.prepareTestProperties();
+        final Properties configProps = IntegrationUtils.prepareTestProperties(dbPath);
         m_config = new MemoryConfig(configProps);
         m_server.startServer(m_config);
     }
 
-    @Before
+    @BeforeAll
+    public static void beforeTests() {
+        Awaitility.setDefaultTimeout(Durations.ONE_SECOND);
+    }
+
+    @BeforeEach
     public void setUp() throws Exception {
-        startServer();
+        String dbPath = IntegrationUtils.tempH2Path(tempFolder);
+        startServer(dbPath);
         m_client = new Client("localhost");
         m_willSubscriber = new MqttClient("tcp://localhost:1883", "Subscriber", s_dataStore);
         m_messageCollector = new MessageCollector();
         m_willSubscriber.setCallback(m_messageCollector);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         m_client.close();
-        LOG.debug("After raw client close");
         Thread.sleep(300); // to let the close event pass before integration stop event
         m_server.stopServer();
-        LOG.debug("After asked integration to stop");
     }
 
     @Test
@@ -120,7 +133,7 @@ public class ServerLowlevelMessagesIntegrationTests {
                 // but after the 2 KEEP ALIVE timeout expires it gets fired,
                 // NB it's 1,5 * KEEP_ALIVE so 3 secs and some millis to propagate the message
                 org.eclipse.paho.client.mqttv3.MqttMessage msg = m_messageCollector.getMessageImmediate();
-                assertNotNull("the will message should be fired after keep alive!", msg);
+                assertNotNull(msg, "will message should be fired after keep alive!");
                 // the will message hasn't to be received before the elapsing of Keep Alive timeout
                 assertTrue(System.currentTimeMillis() - connectTime > 3000);
                 assertEquals(willTestamentMsg, new String(msg.getPayload(), UTF_8));
@@ -154,9 +167,49 @@ public class ServerLowlevelMessagesIntegrationTests {
         m_client.close();
 
         // Verify will testament is published
-        org.eclipse.paho.client.mqttv3.MqttMessage receivedTestament = m_messageCollector.waitMessage(1);
+        Awaitility.await().until(m_messageCollector::isMessageReceived);
+        org.eclipse.paho.client.mqttv3.MqttMessage receivedTestament = m_messageCollector.retrieveMessage();
         assertEquals(willTestamentMsg, new String(receivedTestament.getPayload(), UTF_8));
         m_willSubscriber.disconnect();
     }
 
+    @Test
+    public void testResendNotAckedPublishes() throws MqttException, InterruptedException {
+        LOG.info("*** testResendNotAckedPublishes ***");
+        String topic = "/test";
+
+        MqttClient subscriber = new MqttClient("tcp://localhost:1883", "Subscriber");
+        MqttClient publisher = new MqttClient("tcp://localhost:1883", "Publisher");
+
+        try {
+            subscriber.connect();
+            publisher.connect();
+
+            AtomicBoolean isFirst = new AtomicBoolean(true);
+            AtomicBoolean receivedPublish = new AtomicBoolean(false);
+            subscriber.subscribe(topic, 1, (String topic1, org.eclipse.paho.client.mqttv3.MqttMessage message) -> {
+                if (isFirst.getAndSet(false)) {
+                    // wait to trigger resending PUBLISH
+                    TimeUnit.MILLISECONDS.sleep(FLIGHT_BEFORE_RESEND_MS * 2);
+                } else {
+                    receivedPublish.set(true);
+                }
+            });
+
+            publisher.publish(topic, "hello".getBytes(), 1, false);
+            Awaitility.await("Waiting for resend.")
+                .atMost(FLIGHT_BEFORE_RESEND_MS * 3, TimeUnit.MILLISECONDS)
+                .pollDelay(FLIGHT_BEFORE_RESEND_MS * 2, TimeUnit.MILLISECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
+                .untilTrue(receivedPublish);
+        } finally {
+            try {
+                if (subscriber.isConnected()) {
+                    subscriber.disconnect();
+                }
+            } finally {
+                publisher.disconnect();
+            }
+        }
+    }
 }

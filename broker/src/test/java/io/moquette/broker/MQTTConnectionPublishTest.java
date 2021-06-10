@@ -20,6 +20,7 @@ import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
 import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.persistence.MemorySubscriptionsRepository;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -27,13 +28,13 @@ import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttVersion;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class MQTTConnectionPublishTest {
 
@@ -47,7 +48,7 @@ public class MQTTConnectionPublishTest {
     private MqttMessageBuilders.ConnectBuilder connMsg;
     private MemoryQueueRepository queueRepository;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         connMsg = MqttMessageBuilders.connect().protocolVersion(MqttVersion.MQTT_3_1).cleanSession(true);
 
@@ -81,16 +82,18 @@ public class MQTTConnectionPublishTest {
     @Test
     public void dropConnectionOnPublishWithInvalidTopicFormat() {
         // Connect message with clean session set to true and client id is null.
+        final ByteBuf payload = Unpooled.copiedBuffer("Hello MQTT world!".getBytes(UTF_8));
         MqttPublishMessage publish = MqttMessageBuilders.publish()
             .topicName("")
             .retained(false)
             .qos(MqttQoS.AT_MOST_ONCE)
-            .payload(Unpooled.copiedBuffer("Hello MQTT world!".getBytes(UTF_8))).build();
+            .payload(payload).build();
 
         sut.processPublish(publish);
 
         // Verify
-        assertFalse("Connection should be closed by the broker", channel.isOpen());
+        assertFalse(channel.isOpen(), "Connection should be closed by the broker");
+        payload.release();
     }
 
 }

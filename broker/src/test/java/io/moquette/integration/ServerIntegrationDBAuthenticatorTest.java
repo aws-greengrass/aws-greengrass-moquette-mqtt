@@ -24,24 +24,29 @@ import io.moquette.broker.security.DBAuthenticator;
 import io.moquette.broker.security.DBAuthenticatorTest;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
-import org.junit.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.Properties;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ServerIntegrationDBAuthenticatorTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerIntegrationDBAuthenticatorTest.class);
 
-    static MqttClientPersistence s_dataStore;
-    static MqttClientPersistence s_pubDataStore;
     static DBAuthenticatorTest dbAuthenticatorTest;
 
     Server m_server;
@@ -50,18 +55,19 @@ public class ServerIntegrationDBAuthenticatorTest {
     MessageCollector m_messagesCollector;
     IConfig m_config;
 
-    @BeforeClass
+    @TempDir
+    Path tempFolder;
+    private MqttClientPersistence pubDataStore;
+
+    @BeforeAll
     public static void beforeTests() throws NoSuchAlgorithmException, SQLException, ClassNotFoundException {
-        String tmpDir = System.getProperty("java.io.tmpdir");
-        s_dataStore = new MqttDefaultFilePersistence(tmpDir);
-        s_pubDataStore = new MqttDefaultFilePersistence(tmpDir + File.separator + "publisher");
         dbAuthenticatorTest = new DBAuthenticatorTest();
         dbAuthenticatorTest.setup();
     }
 
-    protected void startServer() throws IOException {
+    protected void startServer(String dbPath) throws IOException {
         m_server = new Server();
-        final Properties configProps = addDBAuthenticatorConf(IntegrationUtils.prepareTestProperties());
+        final Properties configProps = addDBAuthenticatorConf(IntegrationUtils.prepareTestProperties(dbPath));
         m_config = new MemoryConfig(configProps);
         m_server.startServer(m_config);
     }
@@ -79,18 +85,22 @@ public class ServerIntegrationDBAuthenticatorTest {
         return properties;
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        startServer();
+        String dbPath = IntegrationUtils.tempH2Path(tempFolder);
+        startServer(dbPath);
 
-        m_client = new MqttClient("tcp://localhost:1883", "TestClient", s_dataStore);
+        MqttClientPersistence dataStore = new MqttDefaultFilePersistence(IntegrationUtils.newFolder(tempFolder, "client").getAbsolutePath());
+        pubDataStore = new MqttDefaultFilePersistence(IntegrationUtils.newFolder(tempFolder,"publisher").getAbsolutePath());
+
+        m_client = new MqttClient("tcp://localhost:1883", "TestClient", dataStore);
         m_messagesCollector = new MessageCollector();
         m_client.setCallback(m_messagesCollector);
 
-        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", s_pubDataStore);
+        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", pubDataStore);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         if (m_client != null && m_client.isConnected()) {
             m_client.disconnect();
@@ -101,11 +111,9 @@ public class ServerIntegrationDBAuthenticatorTest {
         }
 
         stopServer();
-
-        IntegrationUtils.clearTestStorage();
     }
 
-    @AfterClass
+    @AfterAll
     public static void shutdown() {
         dbAuthenticatorTest.teardown();
     }
@@ -113,7 +121,7 @@ public class ServerIntegrationDBAuthenticatorTest {
     @Test
     public void connectWithValidCredentials() throws Exception {
         LOG.info("*** connectWithCredentials ***");
-        m_client = new MqttClient("tcp://localhost:1883", "Publisher", s_pubDataStore);
+        m_client = new MqttClient("tcp://localhost:1883", "Publisher", pubDataStore);
         MqttConnectOptions options = new MqttConnectOptions();
         options.setUserName("dbuser");
         options.setPassword("password".toCharArray());
@@ -125,7 +133,7 @@ public class ServerIntegrationDBAuthenticatorTest {
     public void connectWithWrongCredentials() {
         LOG.info("*** connectWithWrongCredentials ***");
         try {
-            m_client = new MqttClient("tcp://localhost:1883", "Publisher", s_pubDataStore);
+            m_client = new MqttClient("tcp://localhost:1883", "Publisher", pubDataStore);
             MqttConnectOptions options = new MqttConnectOptions();
             options.setUserName("dbuser");
             options.setPassword("wrongPassword".toCharArray());
@@ -135,11 +143,11 @@ public class ServerIntegrationDBAuthenticatorTest {
                 assertTrue(true);
                 return;
             } else {
-                assertTrue(e.getMessage(), false);
+                fail("Failed with exception: " + e.getMessage());
                 return;
             }
         }
-        assertTrue("must not be connected. cause : wrong password given to client", false);
+        fail("must not be connected. cause : wrong password given to client");
     }
 
 }

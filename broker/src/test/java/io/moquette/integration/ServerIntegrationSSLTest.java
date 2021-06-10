@@ -17,11 +17,13 @@
 package io.moquette.integration;
 
 import io.moquette.broker.Server;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -42,37 +44,58 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Check that Moquette could also handle SSL.
+ *
+ * This test is based on a server's keystore that contains a keypair, export a certificate for the server and import it in
+ * the client's keystore.
+ *
+ * Command executed to create the key on server's keystore:
+ * <pre>
+ * keytool -genkeypair -alias testserver -keyalg RSA -validity 3650 -keysize 2048 -dname cn=localhost -keystore serverkeystore.jks -keypass passw0rdsrv -storepass passw0rdsrv
+ * </pre>
+ *
+ * Command executed to export the certificate from the server's keystore and import directly in client's keystore:
+ * <pre>
+ * keytool -exportcert -alias testserver -keystore serverkeystore.jks -keypass passw0rdsrv -storepass passw0rdsrv | \
+ * keytool -importcert -trustcacerts -noprompt -alias testserver -keystore clientkeystore.jks -keypass passw0rd -storepass passw0rd
+ * </pre>
+ *
+ * Tip: to verify keystore contents:
+ * <pre>
+ * keytool -list -v -keystore clientkeystore.jks
+ * </pre>
  */
 public class ServerIntegrationSSLTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerIntegrationSSLTest.class);
 
-    Server m_server;
-    static MqttClientPersistence s_dataStore;
+    static String backup;
 
+    Server m_server;
     IMqttClient m_client;
     MessageCollector m_callback;
 
-    static String backup;
+    protected String dbPath;
 
-    @BeforeClass
+    @TempDir
+    Path tempFolder;
+
+    @BeforeAll
     public static void beforeTests() {
-        String tmpDir = System.getProperty("java.io.tmpdir");
-        s_dataStore = new MqttDefaultFilePersistence(tmpDir);
         backup = System.getProperty("moquette.path");
     }
 
-    @AfterClass
+    @AfterAll
     public static void afterTests() {
         if (backup == null)
             System.clearProperty("moquette.path");
@@ -87,29 +110,30 @@ public class ServerIntegrationSSLTest {
 
         Properties sslProps = new Properties();
         sslProps.put(BrokerConstants.SSL_PORT_PROPERTY_NAME, "8883");
-        sslProps.put(BrokerConstants.JKS_PATH_PROPERTY_NAME, "serverkeystore.jks");
+        sslProps.put(BrokerConstants.JKS_PATH_PROPERTY_NAME, "src/test/resources/serverkeystore.jks");
         sslProps.put(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
         sslProps.put(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
-        sslProps.put(BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME, IntegrationUtils.localH2MvStoreDBPath());
+        sslProps.put(BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME, dbPath);
         m_server.startServer(sslProps);
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        String dbPath = IntegrationUtils.localH2MvStoreDBPath();
+        dbPath = IntegrationUtils.tempH2Path(tempFolder);
         File dbFile = new File(dbPath);
-        assertFalse(String.format("The DB storagefile %s already exists", dbPath), dbFile.exists());
+        assertFalse(dbFile.exists(), String.format("The DB storagefile %s already exists", dbPath));
 
         startServer();
 
-        m_client = new MqttClient("ssl://localhost:8883", "TestClient", s_dataStore);
+        MqttClientPersistence dataStore = new MqttDefaultFilePersistence(IntegrationUtils.newFolder(tempFolder, "client").getAbsolutePath());
+        m_client = new MqttClient("ssl://localhost:8883", "TestClient", dataStore);
         // m_client = new MqttClient("ssl://test.mosquitto.org:8883", "TestClient", s_dataStore);
 
         m_callback = new MessageCollector();
         m_client.setCallback(m_callback);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         if (m_client != null && m_client.isConnected()) {
             m_client.disconnect();
@@ -118,7 +142,6 @@ public class ServerIntegrationSSLTest {
         if (m_server != null) {
             m_server.stopServer();
         }
-        IntegrationUtils.clearTestStorage();
     }
 
     @Test
@@ -153,20 +176,6 @@ public class ServerIntegrationSSLTest {
         m_client.disconnect();
     }
 
-    /**
-     * keystore generated into test/resources with command:
-     *
-     * keytool -keystore clientkeystore.jks -alias testclient -genkey -keyalg RSA -> mandatory to
-     * put the name surname -> password is passw0rd -> type yes at the end
-     *
-     * to generate the crt file from the keystore -- keytool -certreq -alias testclient -keystore
-     * clientkeystore.jks -file testclient.csr
-     *
-     * keytool -export -alias testclient -keystore clientkeystore.jks -file testclient.crt
-     *
-     * to import an existing certificate: keytool -keystore clientkeystore.jks -import -alias
-     * testclient -file testclient.crt -trustcacerts
-     */
     private SSLSocketFactory configureSSLSocketFactory() throws KeyManagementException, NoSuchAlgorithmException,
             UnrecoverableKeyException, IOException, CertificateException, KeyStoreException {
         KeyStore ks = KeyStore.getInstance("JKS");

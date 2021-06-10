@@ -17,41 +17,46 @@
 package io.moquette.integration;
 
 import io.moquette.BrokerConstants;
+import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
-import io.moquette.broker.Server;
 import io.moquette.broker.security.AcceptAllAuthenticator;
-import io.moquette.broker.subscriptions.Topic;
 import io.moquette.broker.security.IAuthorizatorPolicy;
+import io.moquette.broker.subscriptions.Topic;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
-import org.eclipse.paho.client.mqttv3.*;
+import org.awaitility.Awaitility;
+import org.awaitility.Durations;
+import org.eclipse.paho.client.mqttv3.IMqttClient;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Properties;
 
-
-import static io.moquette.broker.ConnectionTestUtils.*;
+import static io.moquette.broker.ConnectionTestUtils.EMPTY_OBSERVERS;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
 
     private static final Logger LOG =
         LoggerFactory.getLogger(ServerIntegrationPahoCanPublishOnReadBlockedTopicTest.class);
-
-    static MqttClientPersistence s_dataStore;
-    static MqttClientPersistence s_pubDataStore;
 
     Server m_server;
     IMqttClient m_client;
@@ -60,16 +65,17 @@ public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
     IConfig m_config;
     private boolean canRead;
 
-    @BeforeClass
+    @TempDir
+    Path tempFolder;
+
+    @BeforeAll
     public static void beforeTests() {
-        String tmpDir = System.getProperty("java.io.tmpdir");
-        s_dataStore = new MqttDefaultFilePersistence(tmpDir);
-        s_pubDataStore = new MqttDefaultFilePersistence(tmpDir + File.separator + "publisher");
+        Awaitility.setDefaultTimeout(Durations.ONE_SECOND);
     }
 
-    protected void startServer() throws IOException {
+    protected void startServer(String dbPath) {
         m_server = new Server();
-        final Properties configProps = IntegrationUtils.prepareTestProperties();
+        final Properties configProps = IntegrationUtils.prepareTestProperties(dbPath);
         configProps.setProperty(BrokerConstants.REAUTHORIZE_SUBSCRIPTIONS_ON_CONNECT, "true");
         m_config = new MemoryConfig(configProps);
         canRead = true;
@@ -90,18 +96,22 @@ public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
         m_server.startServer(m_config, EMPTY_OBSERVERS, null, new AcceptAllAuthenticator(), switchingAuthorizator);
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        startServer();
+        String dbPath = IntegrationUtils.tempH2Path(tempFolder);
+        startServer(dbPath);
 
-        m_client = new MqttClient("tcp://localhost:1883", "TestClient", s_dataStore);
+        MqttClientPersistence dataStore = new MqttDefaultFilePersistence(IntegrationUtils.newFolder(tempFolder,"client").getAbsolutePath());
+        MqttClientPersistence pubDataStore = new MqttDefaultFilePersistence(IntegrationUtils.newFolder(tempFolder,"publisher").getAbsolutePath());
+
+        m_client = new MqttClient("tcp://localhost:1883", "TestClient", dataStore);
         m_messagesCollector = new MessageCollector();
         m_client.setCallback(m_messagesCollector);
 
-        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", s_pubDataStore);
+        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", pubDataStore);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         if (m_client != null && m_client.isConnected()) {
             m_client.disconnect();
@@ -136,9 +146,12 @@ public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
             .payload(Unpooled.copiedBuffer("Hello World!!".getBytes(UTF_8)))
             .build();
 
+        // We will be sending the same message again, retain the payload.
+        message.payload().retain();
         m_server.internalPublish(message, "INTRLPUB");
 
-        final MqttMessage mqttMessage = m_messagesCollector.waitMessage(1);
+        Awaitility.await().until(m_messagesCollector::isMessageReceived);
+        final MqttMessage mqttMessage = m_messagesCollector.retrieveMessage();
         assertNotNull(mqttMessage);
 
         m_client.disconnect();
@@ -146,6 +159,7 @@ public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
         canRead = false;
 
         // Exercise 2
+        m_messagesCollector.reinit();
         m_client.connect(options);
         try {
             m_client.subscribe("/topic", 0);
@@ -157,7 +171,9 @@ public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
         m_server.internalPublish(message, "INTRLPUB");
 
         // verify the message is not published
-        final MqttMessage mqttMessage2 = m_messagesCollector.waitMessage(1);
-        assertNull("No message MUST be received", mqttMessage2);
+        Awaitility.await("No message MUST be received")
+            .during(Durations.ONE_SECOND)
+            .atMost(Durations.TWO_SECONDS)
+            .until(() -> !m_messagesCollector.isMessageReceived());
     }
 }

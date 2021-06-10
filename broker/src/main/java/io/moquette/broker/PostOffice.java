@@ -109,10 +109,10 @@ class PostOffice {
                 final MqttQoS retainedQos = retainedMsg.qosLevel();
                 MqttQoS qos = lowerQosToTheSubscriptionDesired(subscription, retainedQos);
 
-//                final ByteBuf origPayload = retainedMsg.getPayload();
                 final ByteBuf payloadBuf = Unpooled.wrappedBuffer(retainedMsg.getPayload());
-//                ByteBuf payload = origPayload.retainedDuplicate();
-                targetSession.sendRetainedPublishOnSessionAtQos(subscription.getTopicFilter(), qos, payloadBuf);
+                targetSession.sendRetainedPublishOnSessionAtQos(retainedMsg.getTopic(), qos, payloadBuf);
+                // We made the buffer, we must release it.
+                payloadBuf.release();
             }
         }
     }
@@ -140,12 +140,11 @@ class PostOffice {
             if (!validTopic) {
                 // close the connection, not valid topicFilter is a protocol violation
                 mqttConnection.dropConnection();
-                LOG.warn("Topic filter is not valid. CId={}, topics: {}, offending topic filter: {}", clientID,
-                         topics, topic);
+                LOG.warn("Topic filter is not valid. topics: {}, offending topic filter: {}", topics, topic);
                 return;
             }
 
-            LOG.trace("Removing subscription. CId={}, topic={}", clientID, topic);
+            LOG.trace("Removing subscription topic={}", topic);
             subscriptions.removeSubscription(topic, clientID);
 
             // TODO remove the subscriptions to Session
@@ -162,7 +161,7 @@ class PostOffice {
     void receivedPublishQos0(Topic topic, String username, String clientID, ByteBuf payload, boolean retain,
                              MqttPublishMessage msg) {
         if (!authorizator.canWrite(topic, username, clientID)) {
-            LOG.error("MQTT client: {} is not authorized to publish on topic: {}", clientID, topic);
+            LOG.error("client is not authorized to publish on topic: {}", topic);
             return;
         }
         publish2Subscribers(payload, topic, AT_MOST_ONCE);
@@ -205,7 +204,7 @@ class PostOffice {
         interceptor.notifyTopicPublished(msg, clientId, username);
     }
 
-    private void publish2Subscribers(ByteBuf origPayload, Topic topic, MqttQoS publishingQos) {
+    private void publish2Subscribers(ByteBuf payload, Topic topic, MqttQoS publishingQos) {
         Set<Subscription> topicMatchingSubscriptions = subscriptions.matchQosSharpening(topic);
 
         for (final Subscription sub : topicMatchingSubscriptions) {
@@ -216,8 +215,6 @@ class PostOffice {
             if (isSessionPresent) {
                 LOG.debug("Sending PUBLISH message to active subscriber CId: {}, topicFilter: {}, qos: {}",
                           sub.getClientId(), sub.getTopicFilter(), qos);
-                // we need to retain because duplicate only copy r/w indexes and don't retain() causing refCnt = 0
-                ByteBuf payload = origPayload.retainedDuplicate();
                 targetSession.sendPublishOnSessionAtQos(topic, qos, payload);
             } else {
                 // If we are, the subscriber disconnected after the subscriptions tree selected that session as a
@@ -239,7 +236,7 @@ class PostOffice {
 
         final String clientId = connection.getClientId();
         if (!authorizator.canWrite(topic, username, clientId)) {
-            LOG.error("MQTT client is not authorized to publish on topic. CId={}, topic: {}", clientId, topic);
+            LOG.error("MQTT client is not authorized to publish on topic: {}", topic);
             return;
         }
 
@@ -299,15 +296,20 @@ class PostOffice {
      * notify MqttConnectMessage after connection established (already pass login).
      * @param msg
      */
-    void dispatchConnection(MqttConnectMessage msg){
+    void dispatchConnection(MqttConnectMessage msg) {
         interceptor.notifyClientConnected(msg);
     }
 
-    void dispatchDisconnection(String clientId,String userName){
-        interceptor.notifyClientDisconnected(clientId,userName);
+    void dispatchDisconnection(String clientId,String userName) {
+        interceptor.notifyClientDisconnected(clientId, userName);
     }
 
-    void dispatchConnectionLost(String clientId,String userName){
-        interceptor.notifyClientConnectionLost(clientId,userName);
+    void dispatchConnectionLost(String clientId,String userName) {
+        interceptor.notifyClientConnectionLost(clientId, userName);
     }
+
+//    void flushInFlight(MQTTConnection mqttConnection) {
+//        Session targetSession = sessionRegistry.retrieve(mqttConnection.getClientId());
+//        targetSession.flushAllQueuedMessages();
+//    }
 }

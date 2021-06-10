@@ -32,6 +32,8 @@ public final class BrokerConstants {
             + DEFAULT_MOQUETTE_STORE_H2_DB_FILENAME;
     public static final String WEB_SOCKET_PORT_PROPERTY_NAME = "websocket_port";
     public static final String WSS_PORT_PROPERTY_NAME = "secure_websocket_port";
+    public static final String WEB_SOCKET_PATH_PROPERTY_NAME = "websocket_path";
+    public static final String WEB_SOCKET_MAX_FRAME_SIZE_PROPERTY_NAME = "websocket_max_frame_size";
 
     /**
      * Defines the SSL implementation to use, default to "JDK".
@@ -57,6 +59,7 @@ public final class BrokerConstants {
     public static final String DB_AUTHENTICATOR_DIGEST = "authenticator.db.digest";
     public static final int PORT = 1883;
     public static final int WEBSOCKET_PORT = 8080;
+    public static final String WEBSOCKET_PATH = "/mqtt";
     public static final String DISABLED_PORT_BIND = "disabled";
     public static final String HOST = "0.0.0.0";
     public static final String NEED_CLIENT_AUTH = "need_client_auth";
@@ -84,6 +87,9 @@ public final class BrokerConstants {
     public static final int DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES = 512 * 1024;
     public static final String NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME = "netty.channel.read.limit";
     public static final int DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES = 512 * 1024;
+
+    public static final int FLIGHT_BEFORE_RESEND_MS = 5_000;
+    public static final int INFLIGHT_WINDOW_SIZE = 10;
 
     private BrokerConstants() {
     }

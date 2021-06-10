@@ -1,6 +1,6 @@
 @ECHO OFF
 rem #
-rem # Copyright (c) 2012-2015 Andrea Selva
+rem # Copyright (c) 2012-2020 Andrea Selva
 rem #
 
 echo "                                                                         "
@@ -13,7 +13,7 @@ echo "  \_|  |_/\___/ \__, |\__,_|\___|\__|\__\___| \_|  |_/\_/\_\ \_/   \_/   "
 echo "                   | |                                                   "
 echo "                   |_|                                                   "
 echo "                                                                         "
-echo "                                               version: 0.12.1           "
+echo "                                               version: 0.13             "
 
 set "CURRENT_DIR=%cd%"
 if not "%MOQUETTE_HOME%" == "" goto gotHome
@@ -31,7 +31,7 @@ goto end
 
 rem Set JavaHome if it exists
 if exist { "%JAVA_HOME%\bin\java" } (
-    set "JAVA="%JAVA_HOME%\bin\java"
+    set JAVA="%JAVA_HOME%\bin\java"
 )
 
 echo Using JAVA_HOME:       "%JAVA_HOME%"
@@ -74,15 +74,15 @@ rem set JAVA_OPTS=%JAVA_OPTS%  -XX:ConcGCThreads=16
 rem ## GC logging options -- uncomment to enable
 
 set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintGCDetails
-set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintGCDateStamps
-set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintHeapAtGC
-set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintTenuringDistribution
-set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintGCApplicationStoppedTime
-set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintPromotionFailure
+rem set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintGCDateStamps
+rem set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintHeapAtGC
+rem set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintTenuringDistribution
+rem set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintGCApplicationStoppedTime
+rem set JAVA_OPTS=%JAVA_OPTS% -XX:+PrintPromotionFailure
 rem set JAVA_OPTS=%JAVA_OPTS% -XX:PrintFLSStatistics=1
 rem set JAVA_OPTS=%JAVA_OPTS% -Xloggc:/var/log/moquette/gc.log
-set JAVA_OPTS=%JAVA_OPTS% -XX:+UseGCLogFileRotation
-set JAVA_OPTS=%JAVA_OPTS% -XX:NumberOfGCLogFiles=10
-set JAVA_OPTS=%JAVA_OPTS% -XX:GCLogFileSize=10M"
+REM set JAVA_OPTS=%JAVA_OPTS% -XX:+UseGCLogFileRotation
+REM set JAVA_OPTS=%JAVA_OPTS% -XX:NumberOfGCLogFiles=10
+REM set JAVA_OPTS=%JAVA_OPTS% -XX:GCLogFileSize=10M
 
 %JAVA% -server %JAVA_OPTS% %JAVA_OPTS_SCRIPT% -Dlog4j.configuration=file:%LOG_FILE% -Dmoquette.path=%MOQUETTE_PATH% -cp %MOQUETTE_HOME%\lib\* io.moquette.broker.Server

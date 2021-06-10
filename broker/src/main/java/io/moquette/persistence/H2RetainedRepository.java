@@ -30,7 +30,7 @@ public class H2RetainedRepository implements IRetainedRepository {
         final ByteBuf payload = msg.content();
         byte[] rawPayload = new byte[payload.readableBytes()];
         payload.getBytes(0, rawPayload);
-        final RetainedMessage toStore = new RetainedMessage(msg.fixedHeader().qosLevel(), rawPayload);
+        final RetainedMessage toStore = new RetainedMessage(topic, msg.fixedHeader().qosLevel(), rawPayload);
         queueMap.put(topic, toStore);
     }
 
@@ -45,7 +45,7 @@ public class H2RetainedRepository implements IRetainedRepository {
         final List<RetainedMessage> matchingMessages = new ArrayList<>();
         for (Map.Entry<Topic, RetainedMessage> entry : queueMap.entrySet()) {
             final Topic scanTopic = entry.getKey();
-            if (searchTopic.match(scanTopic)) {
+            if (scanTopic.match(searchTopic)) {
                 matchingMessages.add(entry.getValue());
             }
         }
