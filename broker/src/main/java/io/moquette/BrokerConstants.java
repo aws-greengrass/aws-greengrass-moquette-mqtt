@@ -80,6 +80,11 @@ public final class BrokerConstants {
 
     public static final String STORAGE_CLASS_NAME = "storage_class";
 
+    public static final String TRAFFIC_CHANNEL_WRITE_LIMIT_NAME = "traffic.channel.write.limit";
+    public static final int DEFAULT_TRAFFIC_CHANNEL_WRITE_LIMIT_BYTES = 512 * 1024;
+    public static final String TRAFFIC_CHANNEL_READ_LIMIT_NAME = "traffic.channel.read.limit";
+    public static final int DEFAULT_TRAFFIC_CHANNEL_READ_LIMIT_BYTES = 512 * 1024;
+
     private BrokerConstants() {
     }
 }
