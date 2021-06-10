@@ -43,11 +43,11 @@ import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
-import org.junit.Ignore;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
@@ -146,7 +146,7 @@ import org.slf4j.LoggerFactory;
  * </pre>
  * </p>
  */
-@Ignore("TODO: flaky tests - need to investigate source of db exist problems")
+@Disabled("TODO: flaky tests - need to investigate source of db exist problems")
 public class ServerIntegrationSSLClientAuthTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerIntegrationSSLClientAuthTest.class);
