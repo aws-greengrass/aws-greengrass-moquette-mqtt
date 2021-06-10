@@ -42,7 +42,6 @@ import static io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.*;
 import static io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader.from;
 import static io.netty.handler.codec.mqtt.MqttQoS.*;
-import io.netty.util.ReferenceCountUtil;
 
 final class MQTTConnection {
 
@@ -228,6 +227,7 @@ final class MQTTConnection {
                         LOG.trace("dispatch connection: {}", msg.toString());
                     }
                 } else {
+                    // TODO: Do we need to check if the session is clean before removing?
                     bindedSession.disconnect();
                     sessionRegistry.remove(bindedSession);
                     LOG.error("CONNACK send failed, cleanup session and close the connection", future.cause());

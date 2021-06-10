@@ -181,6 +181,7 @@ public class SessionRegistry {
                 // publish new session
                 dropQueuesForClient(clientId);
                 unsubscribe(oldSession);
+                // TODO: drain queues from old session?
                 copySessionConfig(msg, oldSession);
 
                 LOG.trace("case 2, oldSession with same CId {} disconnected", clientId);
@@ -280,10 +281,12 @@ public class SessionRegistry {
     }
 
     public void remove(Session session) {
+        session.drainQueuedAndInflightMessages();
         pool.remove(session.getClientID(), session);
     }
 
     private void dropQueuesForClient(String clientId) {
+        // TODO: Does this leak anything??
         queues.remove(clientId);
     }
 

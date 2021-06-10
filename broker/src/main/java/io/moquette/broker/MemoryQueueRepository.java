@@ -5,16 +5,37 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import io.moquette.BrokerConstants;
+import io.moquette.broker.config.IConfig;
 
 public class MemoryQueueRepository implements IQueueRepository {
+    int capacity;
 
+    public MemoryQueueRepository() {
+        capacity = 0;
+    }
+
+    public MemoryQueueRepository(IConfig props) {
+        this.capacity = Integer.parseInt(props.getProperty(BrokerConstants.SESSION_QUEUE_SIZE, "0"));
+    }
+
+    // TODO: Clients connecting with random client IDs will leak
+    // these sessions. There should be logic to remove these
     private Map<String, Queue<SessionRegistry.EnqueuedMessage>> queues = new HashMap<>();
 
     @Override
     public Queue<SessionRegistry.EnqueuedMessage> createQueue(String cli, boolean clean) {
-        final ConcurrentLinkedQueue<SessionRegistry.EnqueuedMessage> queue = new ConcurrentLinkedQueue<>();
-        queues.put(cli, queue);
-        return queue;
+        if (capacity == 0) {
+            final ConcurrentLinkedQueue<SessionRegistry.EnqueuedMessage> queue = new ConcurrentLinkedQueue<>();
+            queues.put(cli, queue);
+            return queue;
+        } else {
+            // Cannot specify capacity on ConcurrentLinkedQueue
+            final LinkedBlockingQueue<SessionRegistry.EnqueuedMessage> queue = new LinkedBlockingQueue<>();
+            queues.put(cli, queue);
+            return queue;
+        }
     }
 
     @Override

@@ -267,10 +267,7 @@ class Session {
 
             // TODO drainQueueToConnection();?
         } else {
-            final SessionRegistry.PublishedMessage msg = new SessionRegistry.PublishedMessage(topic, qos, payload);
-            // Adding to a queue, retain.
-            msg.retain();
-            sessionQueue.add(msg);
+            queueOrDisconnect(topic, qos, payload);
         }
     }
 
@@ -295,10 +292,20 @@ class Session {
 
             drainQueueToConnection();
         } else {
-            final SessionRegistry.PublishedMessage msg = new SessionRegistry.PublishedMessage(topic, qos, payload);
-            // Adding to a queue, retain.
+            queueOrDisconnect(topic, qos, payload);
+        }
+    }
+
+    private void queueOrDisconnect(Topic topic, MqttQoS qos, ByteBuf payload) {
+        final SessionRegistry.PublishedMessage msg = new SessionRegistry.PublishedMessage(topic, qos, payload);
+        try {
             msg.retain();
             sessionQueue.add(msg);
+        } catch (IllegalStateException e) {
+            LOG.warn("Max queue size exceeded! Draining queue and disconnecting client.");
+            msg.release();
+            closeImmediately();
+            drainQueuedAndInflightMessages();
         }
     }
 
@@ -397,6 +404,14 @@ class Session {
             }
             // we fetched msg from a map, but the release is cancelled out by the above retain
         }
+    }
+
+    public void drainQueuedAndInflightMessages() {
+        while (!sessionQueue.isEmpty()) {
+            final SessionRegistry.EnqueuedMessage msg = sessionQueue.remove();
+            msg.release();
+        }
+        // TODO: drain inflight messages
     }
 
     public void writabilityChanged() {
