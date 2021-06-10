@@ -169,10 +169,10 @@ class NewNettyAcceptor {
         nettyChannelTimeoutSeconds = props.intProp(BrokerConstants.NETTY_CHANNEL_TIMEOUT_SECONDS_PROPERTY_NAME, 10);
         maxBytesInMessage = props.intProp(BrokerConstants.NETTY_MAX_BYTES_PROPERTY_NAME,
                 BrokerConstants.DEFAULT_NETTY_MAX_BYTES_IN_MESSAGE);
-        trafficMaxReadBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.TRAFFIC_CHANNEL_READ_LIMIT_NAME,
-            BrokerConstants.DEFAULT_TRAFFIC_CHANNEL_READ_LIMIT_BYTES), 0);
-        trafficMaxWriteBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.TRAFFIC_CHANNEL_WRITE_LIMIT_NAME,
-            BrokerConstants.DEFAULT_TRAFFIC_CHANNEL_WRITE_LIMIT_BYTES), 0);
+        trafficMaxReadBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME,
+            BrokerConstants.DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES), 0);
+        trafficMaxWriteBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME,
+            BrokerConstants.DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES), 0);
         boolean epoll = props.boolProp(BrokerConstants.NETTY_EPOLL_PROPERTY_NAME, false);
         if (epoll) {
             LOG.info("Netty is using Epoll");
