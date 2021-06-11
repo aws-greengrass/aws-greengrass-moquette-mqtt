@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+
 import io.moquette.BrokerConstants;
 import io.moquette.broker.config.IConfig;
 
@@ -17,7 +18,11 @@ public class MemoryQueueRepository implements IQueueRepository {
     }
 
     public MemoryQueueRepository(IConfig props) {
-        this.capacity = Integer.parseInt(props.getProperty(BrokerConstants.SESSION_QUEUE_SIZE, "0"));
+        int capacity = Integer.parseInt(props.getProperty(BrokerConstants.SESSION_QUEUE_SIZE, "0"));
+        if (capacity < 0) {
+            capacity = 0;
+        }
+        this.capacity = capacity;
     }
 
     // TODO: Clients connecting with random client IDs will leak
