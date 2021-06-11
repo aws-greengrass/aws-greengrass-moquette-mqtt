@@ -411,9 +411,12 @@ class Session {
             final SessionRegistry.EnqueuedMessage msg = sessionQueue.remove();
             msg.release();
         }
-        inflightWindow.forEach((k, v) -> {
-            if (inflightWindow.remove(k) == v) {
-                v.release();
+
+        List<Integer> inflightKeys = new ArrayList<>(inflightWindow.keySet());
+        inflightKeys.forEach((k) -> {
+            SessionRegistry.EnqueuedMessage msg = inflightWindow.get(k);
+            if (msg != null && inflightWindow.remove(k) == msg) {
+                msg.release();
                 inflightSlots.incrementAndGet();
             }
         });

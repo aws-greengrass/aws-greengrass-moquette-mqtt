@@ -39,11 +39,50 @@ public class SessionTest {
 
         // Verify
         assertTrue(queuedMessages.isEmpty(), "Messages should be drained");
-        
+
         // release the rest, to avoid leaking buffers
         for (int i = 2; i <= 11; i++) {
             client.pubAckReceived(i);
         }
+        client.closeImmediately();
+        testChannel.close();
+    }
+
+    @Test
+    public void testDrainQueuedAndInflightMessages() {
+        final Queue<SessionRegistry.EnqueuedMessage> queuedMessages = new ConcurrentLinkedQueue<>();
+        final Session client = new Session("Subscriber", true, null, queuedMessages);
+        final EmbeddedChannel testChannel = new EmbeddedChannel();
+        BrokerConfiguration brokerConfiguration = new BrokerConfiguration(true, false, false, false);
+        MQTTConnection mqttConnection = new MQTTConnection(testChannel, brokerConfiguration, null, null, null);
+        client.markConnecting();
+        client.bind(mqttConnection);
+        client.completeConnection();
+
+        final Topic destinationTopic = new Topic("/a/b");
+        // simulate a filling of inflight space and start pushing on queue
+        for (int i = 0; i < 20; i++) {
+            sendQoS1To(client, destinationTopic, "Hello World " + i + "!");
+        }
+
+        assertEquals(10, queuedMessages.size(), "Inflight zone must be full, and the 10 messages must be queued");
+
+        // Drain queued and in flight messages
+        client.drainQueuedAndInflightMessages();
+
+        // Verify
+        assertTrue(queuedMessages.isEmpty(), "Messages should be drained");
+
+        // simulate a filling of inflight space. Queue should not be filled
+        for (int i = 0; i < 10; i++) {
+            sendQoS1To(client, destinationTopic, "Hello World " + i + "!");
+        }
+
+        // Verify
+        assertTrue(queuedMessages.isEmpty(), "Messages should be drained");
+
+        // and clean up
+        client.drainQueuedAndInflightMessages();
         client.closeImmediately();
         testChannel.close();
     }
