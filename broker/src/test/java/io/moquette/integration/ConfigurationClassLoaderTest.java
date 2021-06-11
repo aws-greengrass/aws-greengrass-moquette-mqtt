@@ -24,18 +24,25 @@ import io.moquette.broker.security.ClientData;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.Topic;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Properties;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConfigurationClassLoaderTest implements IAuthenticator, IAuthorizatorPolicy {
 
     Server m_server;
     IConfig m_config;
+
+    @TempDir
+    Path tempFolder;
+    private String dbPath;
 
     protected void startServer(Properties props) throws IOException {
         m_server = new Server();
@@ -43,15 +50,19 @@ public class ConfigurationClassLoaderTest implements IAuthenticator, IAuthorizat
         m_server.startServer(m_config);
     }
 
-    @After
+    @BeforeEach
+    public void setUp() {
+        dbPath = IntegrationUtils.tempH2Path(tempFolder);
+    }
+
+    @AfterEach
     public void tearDown() {
         m_server.stopServer();
-        IntegrationUtils.clearTestStorage();
     }
 
     @Test
     public void loadAuthenticator() throws Exception {
-        Properties props = new Properties(IntegrationUtils.prepareTestProperties());
+        Properties props = new Properties(IntegrationUtils.prepareTestProperties(dbPath));
         props.setProperty(BrokerConstants.AUTHENTICATOR_CLASS_NAME, getClass().getName());
         startServer(props);
         assertTrue(true);
@@ -59,7 +70,7 @@ public class ConfigurationClassLoaderTest implements IAuthenticator, IAuthorizat
 
     @Test
     public void loadAuthorizator() throws Exception {
-        Properties props = new Properties(IntegrationUtils.prepareTestProperties());
+        Properties props = new Properties(IntegrationUtils.prepareTestProperties(dbPath));
         props.setProperty(BrokerConstants.AUTHORIZATOR_CLASS_NAME, getClass().getName());
         startServer(props);
         assertTrue(true);

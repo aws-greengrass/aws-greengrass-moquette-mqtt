@@ -20,17 +20,19 @@ import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
 import io.moquette.broker.Server;
 import org.fusesource.mqtt.client.*;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ServerIntegrationFuseTest {
 
@@ -42,22 +44,26 @@ public class ServerIntegrationFuseTest {
     BlockingConnection m_publisher;
     IConfig m_config;
 
-    protected void startServer() throws IOException {
+    @TempDir
+    Path tempFolder;
+
+    protected void startServer(String dbPath) throws IOException {
         m_server = new Server();
-        final Properties configProps = IntegrationUtils.prepareTestProperties();
+        final Properties configProps = IntegrationUtils.prepareTestProperties(dbPath);
         m_config = new MemoryConfig(configProps);
         m_server.startServer(m_config);
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        startServer();
+        String dbPath = IntegrationUtils.tempH2Path(tempFolder);
+        startServer(dbPath);
 
         m_mqtt = new MQTT();
         m_mqtt.setHost("localhost", 1883);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         if (m_subscriber != null) {
             m_subscriber.disconnect();
@@ -68,8 +74,6 @@ public class ServerIntegrationFuseTest {
         }
 
         m_server.stopServer();
-
-        IntegrationUtils.clearTestStorage();
     }
 
     @Test
@@ -101,7 +105,7 @@ public class ServerIntegrationFuseTest {
 
         // Verify, that the testament is fired
         Message msg = m_subscriber.receive(1, TimeUnit.SECONDS); // wait the flush interval (1 sec)
-        assertNotNull("We should get notified with 'Will' message", msg);
+        assertNotNull(msg, "We should get notified with 'Will' message");
         msg.ack();
         assertEquals(willTestamentMsg, new String(msg.getPayload(), UTF_8));
     }

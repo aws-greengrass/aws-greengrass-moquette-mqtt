@@ -28,8 +28,8 @@ import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.*;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.Charset;
 import java.util.*;
@@ -40,7 +40,7 @@ import static io.netty.handler.codec.mqtt.MqttQoS.AT_MOST_ONCE;
 import static io.netty.handler.codec.mqtt.MqttQoS.EXACTLY_ONCE;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class PostOfficePublishTest {
 
@@ -66,7 +66,7 @@ public class PostOfficePublishTest {
     private MemoryRetainedRepository retainedRepository;
     private MemoryQueueRepository queueRepository;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         sessionRegistry = initPostOfficeAndSubsystems();
 
@@ -146,7 +146,7 @@ public class PostOfficePublishTest {
             .topicName(NEWS_TOPIC).build(), "username");
 
         // Verify
-        assertFalse("First 'subscriber' channel MUST be closed by the broker", clientXA.channel.isOpen());
+        assertFalse(clientXA.channel.isOpen(), "First 'subscriber' channel MUST be closed by the broker");
         ConnectionTestUtils.verifyPublishIsReceived((EmbeddedChannel) clientYA.channel, AT_MOST_ONCE, "Hello 2");
     }
 
@@ -228,10 +228,13 @@ public class PostOfficePublishTest {
         connection.processConnect(connectMessage);
         ConnectionTestUtils.assertConnectAccepted(channel);
 
+        final ByteBuf payload1 = ByteBufUtil.writeAscii(UnpooledByteBufAllocator.DEFAULT, "Hello world!");
         this.retainedRepository.retain(new Topic(NEWS_TOPIC), MqttMessageBuilders.publish()
-            .payload(ByteBufUtil.writeAscii(UnpooledByteBufAllocator.DEFAULT, "Hello world!"))
+            .payload(payload1)
             .qos(AT_LEAST_ONCE)
             .build());
+        // Retaining a msg does not release the payload.
+        payload1.release();
 
         // Exercise
         final ByteBuf anyPayload = Unpooled.copiedBuffer("Any payload", Charset.defaultCharset());
@@ -241,9 +244,11 @@ public class PostOfficePublishTest {
                 .qos(MqttQoS.AT_MOST_ONCE)
                 .retained(false)
                 .topicName(NEWS_TOPIC).build());
+        // receivedPublishQos0 does not release payload.
+        anyPayload.release();
 
         // Verify
-        assertTrue("QoS0 MUST clean retained message for topic", retainedRepository.isEmpty());
+        assertTrue(retainedRepository.isEmpty(), "QoS0 MUST clean retained message for topic");
     }
 
     @Test
@@ -373,7 +378,7 @@ public class PostOfficePublishTest {
 
     private void verifyNoPublishIsReceived(EmbeddedChannel channel) {
         final Object messageReceived = channel.readOutbound();
-        assertNull("Received an out message from processor while not expected", messageReceived);
+        assertNull(messageReceived, "Received an out message from processor while not expected");
     }
 
     @Test
@@ -405,7 +410,7 @@ public class PostOfficePublishTest {
                 .topicName(NEWS_TOPIC).build());
 
         // Verify
-        assertTrue("Retained message for topic /news must be cleared", retainedRepository.isEmpty());
+        assertTrue(retainedRepository.isEmpty(), "Retained message for topic /news must be cleared");
     }
 
     private void assertMessageIsRetained(String expectedTopicName, ByteBuf expectedPayload) {

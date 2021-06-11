@@ -19,24 +19,30 @@ package io.moquette.integration;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
-import org.eclipse.paho.client.mqttv3.*;
+import org.awaitility.Awaitility;
+import org.awaitility.Durations;
+import org.eclipse.paho.client.mqttv3.IMqttClient;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import java.io.File;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Properties;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ServerIntegrationRestartTest {
 
-    static MqttClientPersistence s_dataStore;
-    static MqttClientPersistence s_pubDataStore;
     static MqttConnectOptions CLEAN_SESSION_OPT = new MqttConnectOptions();
 
     Server m_server;
@@ -45,33 +51,41 @@ public class ServerIntegrationRestartTest {
     IConfig m_config;
     MessageCollector m_messageCollector;
 
-    protected void startServer() throws IOException {
+    @TempDir
+    Path tempFolder;
+    private String dbPath;
+    private MqttClientPersistence pubDataStore;
+    private MqttClientPersistence subDataStore;
+
+    protected void startServer(String dbPath) throws IOException {
         m_server = new Server();
-        final Properties configProps = IntegrationUtils.prepareTestProperties();
+        final Properties configProps = IntegrationUtils.prepareTestProperties(dbPath);
         m_config = new MemoryConfig(configProps);
         m_server.startServer(m_config);
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void beforeTests() {
-        String tmpDir = System.getProperty("java.io.tmpdir");
-        s_dataStore = new MqttDefaultFilePersistence(tmpDir);
-        s_pubDataStore = new MqttDefaultFilePersistence(tmpDir + File.separator + "publisher");
         CLEAN_SESSION_OPT.setCleanSession(false);
+        Awaitility.setDefaultTimeout(Durations.ONE_SECOND);
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        startServer();
+        dbPath = IntegrationUtils.tempH2Path(tempFolder);
 
-        m_subscriber = new MqttClient("tcp://localhost:1883", "Subscriber", s_dataStore);
+        startServer(dbPath);
+
+        pubDataStore = new MqttDefaultFilePersistence(IntegrationUtils.newFolder(tempFolder, "publisher").getAbsolutePath());
+        subDataStore = new MqttDefaultFilePersistence(IntegrationUtils.newFolder(tempFolder, "subscriber").getAbsolutePath());
+        m_subscriber = new MqttClient("tcp://localhost:1883", "Subscriber", subDataStore);
         m_messageCollector = new MessageCollector();
         m_subscriber.setCallback(m_messageCollector);
 
-        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", s_pubDataStore);
+        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", pubDataStore);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         if (m_subscriber != null && m_subscriber.isConnected()) {
             m_subscriber.disconnect();
@@ -82,8 +96,28 @@ public class ServerIntegrationRestartTest {
         }
 
         m_server.stopServer();
+    }
 
-        IntegrationUtils.clearTestStorage();
+    @DisplayName("given not clean session then after a server restart the session should be present")
+    @Test
+    public void testNotCleanSessionIsVisibleAfterServerRestart() throws Exception {
+        m_subscriber.connect(CLEAN_SESSION_OPT);
+        m_subscriber.subscribe("/topic", 1);
+        m_subscriber.disconnect();
+
+        m_server.stopServer();
+        m_server.startServer(IntegrationUtils.prepareTestProperties(dbPath));
+
+        //publish a message
+        m_publisher.connect();
+        m_publisher.publish("/topic", "Hello world MQTT!!".getBytes(UTF_8), 1, false);
+
+        //reconnect subscriber and topic should be sent
+        m_subscriber.connect(CLEAN_SESSION_OPT);
+        // verify the sent message while offline is read
+        Awaitility.await().until(m_messageCollector::isMessageReceived);
+        MqttMessage msg = m_messageCollector.retrieveMessage();
+        assertEquals("Hello world MQTT!!", new String(msg.getPayload(), UTF_8));
     }
 
     @Test
@@ -97,7 +131,7 @@ public class ServerIntegrationRestartTest {
         m_server.stopServer();
 
         // restart the integration
-        m_server.startServer(IntegrationUtils.prepareTestProperties());
+        m_server.startServer(IntegrationUtils.prepareTestProperties(dbPath));
 
         // reconnect the Subscriber subscribing to the same /topic but different QoS
         m_subscriber.connect(CLEAN_SESSION_OPT);
@@ -108,10 +142,13 @@ public class ServerIntegrationRestartTest {
         m_publisher.publish("/topic", "Hello world MQTT!!".getBytes(UTF_8), 1, false);
 
         // read the messages
-        MqttMessage msg = m_messageCollector.waitMessage(1);
+        Awaitility.await().until(m_messageCollector::isMessageReceived);
+        MqttMessage msg = m_messageCollector.retrieveMessage();
         assertEquals("Hello world MQTT!!", new String(msg.getPayload(), UTF_8));
-        // no more messages on the same topic will be received
-        assertNull(m_messageCollector.waitMessage(1));
+        Awaitility.await("no more messages on the same topic will be received")
+            .during(Durations.ONE_SECOND)
+            .atMost(Durations.TWO_SECONDS)
+            .until(() -> !m_messageCollector.isMessageReceived());
     }
 
     @Test
@@ -123,7 +160,7 @@ public class ServerIntegrationRestartTest {
         m_server.stopServer();
 
         // restart the integration
-        m_server.startServer(IntegrationUtils.prepareTestProperties());
+        m_server.startServer(IntegrationUtils.prepareTestProperties(dbPath));
 
         m_publisher.connect();
         m_publisher.publish("/topic", "Hello world MQTT!!".getBytes(UTF_8), 0, false);
@@ -143,20 +180,22 @@ public class ServerIntegrationRestartTest {
         m_server.stopServer();
 
         // restart the integration
-        m_server.startServer(IntegrationUtils.prepareTestProperties());
+        m_server.startServer(IntegrationUtils.prepareTestProperties(dbPath));
         // subscriber reconnects
-        m_subscriber = new MqttClient("tcp://localhost:1883", "Subscriber", s_dataStore);
+        m_subscriber = new MqttClient("tcp://localhost:1883", "Subscriber", subDataStore);
         m_subscriber.setCallback(m_messageCollector);
         m_subscriber.connect();
 
         // publisher publishes on /topic
-        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", s_pubDataStore);
+        m_publisher = new MqttClient("tcp://localhost:1883", "Publisher", pubDataStore);
         m_publisher.connect();
         m_publisher.publish("/topic", "Hello world MQTT!!".getBytes(UTF_8), 1, false);
 
         // Expected
-        // the subscriber doesn't get notified (it's fully unsubscribed)
-        assertNull(m_messageCollector.waitMessage(1));
+        Awaitility.await("the subscriber doesn't get notified (it's fully unsubscribed)")
+            .during(Durations.ONE_SECOND)
+            .atMost(Durations.TWO_SECONDS)
+            .until(() -> !m_messageCollector.isMessageReceived());
     }
 
     /**
@@ -169,7 +208,8 @@ public class ServerIntegrationRestartTest {
         client.connect();
         client.subscribe(topic, 1);
         client.publish(topic, "Hello world MQTT!!".getBytes(UTF_8), 0, false);
-        MqttMessage msg = collector.waitMessage(1);
+        Awaitility.await().until(collector::isMessageReceived);
+        MqttMessage msg = collector.retrieveMessage();
         assertEquals("Hello world MQTT!!", new String(msg.getPayload(), UTF_8));
         return client;
     }
