@@ -37,7 +37,7 @@ public class MemoryQueueRepository implements IQueueRepository {
             return queue;
         } else {
             // Cannot specify capacity on ConcurrentLinkedQueue
-            final LinkedBlockingQueue<SessionRegistry.EnqueuedMessage> queue = new LinkedBlockingQueue<>();
+            final LinkedBlockingQueue<SessionRegistry.EnqueuedMessage> queue = new LinkedBlockingQueue<>(capacity);
             queues.put(cli, queue);
             return queue;
         }
