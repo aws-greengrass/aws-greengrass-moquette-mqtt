@@ -411,7 +411,12 @@ class Session {
             final SessionRegistry.EnqueuedMessage msg = sessionQueue.remove();
             msg.release();
         }
-        // TODO: drain inflight messages
+        inflightWindow.forEach((k, v) -> {
+            if (inflightWindow.remove(k) == v) {
+                v.release();
+                inflightSlots.incrementAndGet();
+            }
+        });
     }
 
     public void writabilityChanged() {
