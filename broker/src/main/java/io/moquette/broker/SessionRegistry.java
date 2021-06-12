@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -137,7 +136,7 @@ public class SessionRegistry {
             // if the subscriptions are present is obviously false
             final Queue<EnqueuedMessage> persistentQueue = queues.get(clientId);
             if (persistentQueue != null) {
-                Session rehydrated = new Session(clientId, false, persistentQueue);
+                Session rehydrated = new Session(clientId, false, persistentQueue, this);
                 pool.put(clientId, rehydrated);
             }
         }
@@ -181,6 +180,7 @@ public class SessionRegistry {
                 // publish new session
                 dropQueuesForClient(clientId);
                 unsubscribe(oldSession);
+                oldSession.drainQueuedAndInFlightMessages();
                 copySessionConfig(msg, oldSession);
 
                 LOG.trace("case 2, oldSession with same CId {} disconnected", clientId);
@@ -199,8 +199,7 @@ public class SessionRegistry {
         } else {
             // case 4
             LOG.trace("case 4, oldSession with same CId {} still connected, force to close", clientId);
-            oldSession.closeImmediately();
-            //remove(clientId);
+            remove(oldSession);
             creationResult = new SessionCreationResult(newSession, CreationModeEnum.DROP_EXISTING, true);
         }
 
@@ -247,9 +246,9 @@ public class SessionRegistry {
         final Session newSession;
         if (msg.variableHeader().isWillFlag()) {
             final Session.Will will = createWill(msg);
-            newSession = new Session(clientId, clean, will, sessionQueue);
+            newSession = new Session(clientId, clean, will, sessionQueue, this);
         } else {
-            newSession = new Session(clientId, clean, sessionQueue);
+            newSession = new Session(clientId, clean, sessionQueue, this);
         }
 
         newSession.markConnecting();
@@ -280,6 +279,8 @@ public class SessionRegistry {
     }
 
     public void remove(Session session) {
+        unsubscribe(session);
+        session.terminateSession();
         pool.remove(session.getClientID(), session);
     }
 

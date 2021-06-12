@@ -69,7 +69,7 @@ class Session {
     }
 
     enum SessionStatus {
-        CONNECTED, CONNECTING, DISCONNECTING, DISCONNECTED
+        CONNECTED, CONNECTING, DISCONNECTING, DISCONNECTED, TERMINATING
     }
 
     static final class Will {
@@ -98,19 +98,23 @@ class Session {
     private final DelayQueue<InFlightPacket> inflightTimeouts = new DelayQueue<>();
     private final Map<Integer, MqttPublishMessage> qos2Receiving = new HashMap<>();
     private final AtomicInteger inflightSlots = new AtomicInteger(INFLIGHT_WINDOW_SIZE); // this should be configurable
+    private final SessionRegistry sessionRegistry;
 
-    Session(String clientId, boolean clean, Will will, Queue<SessionRegistry.EnqueuedMessage> sessionQueue) {
-        this(clientId, clean, sessionQueue);
+    Session(String clientId, boolean clean, Will will, Queue<SessionRegistry.EnqueuedMessage> sessionQueue,
+            SessionRegistry sessionRegistry) {
+        this(clientId, clean, sessionQueue, sessionRegistry);
         this.will = will;
     }
 
-    Session(String clientId, boolean clean, Queue<SessionRegistry.EnqueuedMessage> sessionQueue) {
+    Session(String clientId, boolean clean, Queue<SessionRegistry.EnqueuedMessage> sessionQueue,
+            SessionRegistry sessionRegistry) {
         if (sessionQueue == null) {
             throw new IllegalArgumentException("sessionQueue parameter can't be null");
         }
         this.clientId = clientId;
         this.clean = clean;
         this.sessionQueue = sessionQueue;
+        this.sessionRegistry = sessionRegistry;
     }
 
     void update(boolean clean, Will will) {
@@ -177,7 +181,44 @@ class Session {
         mqttConnection = null;
         will = null;
 
+        // A publish thread could possibly be queueing a message as this is executing.
+        // Rather than try to protect against that here, the session queue will be re-drained
+        // before it is replace/resumed later.
+        if (isClean()) {
+            drainQueuedAndInFlightMessages();
+        }
+
         assignState(SessionStatus.DISCONNECTING, SessionStatus.DISCONNECTED);
+    }
+
+    public void terminateSession() {
+        SessionStatus oldStatus = status.getAndSet(SessionStatus.TERMINATING);
+        if (oldStatus == SessionStatus.TERMINATING) {
+            // Another thread has already initiated session termination, return
+            return;
+        }
+
+        if (oldStatus == SessionStatus.CONNECTED) {
+            closeImmediately();
+        }
+
+        drainQueuedAndInFlightMessages();
+    }
+
+    public void drainQueuedAndInFlightMessages() {
+        while (!sessionQueue.isEmpty()) {
+            final SessionRegistry.EnqueuedMessage msg = sessionQueue.remove();
+            msg.release();
+        }
+
+        List<Integer> inflightKeys = new ArrayList<>(inflightWindow.keySet());
+        inflightKeys.forEach((k) -> {
+            SessionRegistry.EnqueuedMessage msg = inflightWindow.get(k);
+            if (msg != null && inflightWindow.remove(k) == msg) {
+                msg.release();
+                inflightSlots.incrementAndGet();
+            }
+        });
     }
 
     boolean isClean() {
