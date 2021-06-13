@@ -41,8 +41,11 @@ class Session extends AbstractReferenceCounted {
 
     private static final Logger LOG = LoggerFactory.getLogger(Session.class);
 
+    // Called when the Session reference count reaches 0
     @Override
     protected void deallocate() {
+        // Release all messages currently queued or in flight to prevent them
+        // from being leaked once this Session is garbage collected
         drainQueuedAndInFlightMessages();
     }
 
@@ -262,7 +265,15 @@ class Session extends AbstractReferenceCounted {
     }
 
     public void sendPublishOnSessionAtQos(Topic topic, MqttQoS qos, ByteBuf payload) {
-        retain();
+        // Add reference to this Session to prevent it from being deallocated
+        // while we are processing this Publish message.
+        try {
+            retain();
+        } catch (IllegalStateException e) {
+            LOG.debug("Session has already been deallocated, dropping message");
+            return;
+        }
+
         switch (qos) {
             case AT_MOST_ONCE:
                 if (connected()) {

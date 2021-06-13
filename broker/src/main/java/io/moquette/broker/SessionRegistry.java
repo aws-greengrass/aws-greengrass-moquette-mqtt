@@ -289,9 +289,10 @@ public class SessionRegistry {
      * @param session Session to remove from the registry
      */
     public void remove(Session session) {
-        pool.remove(session.getClientID(), session);
-        unsubscribe(session);
-        session.release();
+        if (pool.remove(session.getClientID(), session)) {
+            unsubscribe(session);
+            session.release();
+        }
     }
 
     private void dropQueuesForClient(String clientId) {
