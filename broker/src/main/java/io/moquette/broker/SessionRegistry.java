@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -181,10 +180,11 @@ public class SessionRegistry {
                 // publish new session
                 dropQueuesForClient(clientId);
                 unsubscribe(oldSession);
-                copySessionConfig(msg, oldSession);
+                oldSession.release();
+                copySessionConfig(msg, newSession);
 
                 LOG.trace("case 2, oldSession with same CId {} disconnected", clientId);
-                creationResult = new SessionCreationResult(oldSession, CreationModeEnum.CREATED_CLEAN_NEW, true);
+                creationResult = new SessionCreationResult(newSession, CreationModeEnum.CREATED_CLEAN_NEW, false);
             } else {
                 final boolean connecting = oldSession.assignState(SessionStatus.DISCONNECTED, SessionStatus.CONNECTING);
                 if (!connecting) {
@@ -193,6 +193,10 @@ public class SessionRegistry {
                 // case 3
                 reactivateSubscriptions(oldSession, username);
 
+                // Remove session queue and release so that messages queued in oldSession are not released
+                newSession.setSessionQueue(null);
+                newSession.release();
+
                 LOG.trace("case 3, oldSession with same CId {} disconnected", clientId);
                 creationResult = new SessionCreationResult(oldSession, CreationModeEnum.REOPEN_EXISTING, true);
             }
@@ -200,7 +204,7 @@ public class SessionRegistry {
             // case 4
             LOG.trace("case 4, oldSession with same CId {} still connected, force to close", clientId);
             oldSession.closeImmediately();
-            //remove(clientId);
+            remove(oldSession);
             creationResult = new SessionCreationResult(newSession, CreationModeEnum.DROP_EXISTING, true);
         }
 
@@ -279,8 +283,15 @@ public class SessionRegistry {
         return pool.get(clientID);
     }
 
+    /**
+     * Removes a session from the registry. Removed session will no longer
+     * receive published messages.
+     * @param session Session to remove from the registry
+     */
     public void remove(Session session) {
         pool.remove(session.getClientID(), session);
+        unsubscribe(session);
+        session.release();
     }
 
     private void dropQueuesForClient(String clientId) {

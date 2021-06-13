@@ -1,6 +1,0 @@
-rootProject.name = 'moquette-parent'
-//include ':aws-greengrass-mqtt-broker'
-include ':moquette-broker'
-
-//project(':aws-greengrass-mqtt-broker').projectDir = "$rootDir/greengrass-mqtt-broker" as File
-project(':moquette-broker').projectDir = "$rootDir/broker" as File
