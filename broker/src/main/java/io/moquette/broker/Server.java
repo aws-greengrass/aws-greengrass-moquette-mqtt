@@ -170,7 +170,7 @@ public class Server {
         } else {
             LOG.trace("Configuring in-memory subscriptions store");
             subscriptionsRepository = new MemorySubscriptionsRepository();
-            queueRepository = new MemoryQueueRepository();
+            queueRepository = new MemoryQueueRepository(config);
             retainedRepository = new MemoryRetainedRepository();
         }
 
