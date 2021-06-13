@@ -134,6 +134,7 @@ public class MQTTService extends PluginService {
         defaultConfig.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
         defaultConfig.setProperty(BrokerConstants.IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME, "true");
         defaultConfig.setProperty(BrokerConstants.NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME, "TLSv1.2");
+        defaultConfig.setProperty(BrokerConstants.SESSION_QUEUE_SIZE, "10000");
 
         //Disable plain TCP port
         defaultConfig.setProperty(BrokerConstants.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);

@@ -82,6 +82,7 @@ public final class BrokerConstants {
     public static final String BUGSNAG_TOKEN_PROPERTY_NAME = "bugsnag.token";
 
     public static final String STORAGE_CLASS_NAME = "storage_class";
+    public static final String SESSION_QUEUE_SIZE = "session_queue_size";
 
     public static final String NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME = "netty.channel.write.limit";
     public static final int DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES = 512 * 1024;

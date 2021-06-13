@@ -318,10 +318,7 @@ class Session extends AbstractReferenceCounted {
 
             // TODO drainQueueToConnection();?
         } else {
-            final SessionRegistry.PublishedMessage msg = new SessionRegistry.PublishedMessage(topic, qos, payload);
-            // Adding to a queue, retain.
-            msg.retain();
-            sessionQueue.add(msg);
+            queueOrTerminateSession(topic, qos, payload);
         }
     }
 
@@ -346,11 +343,25 @@ class Session extends AbstractReferenceCounted {
 
             drainQueueToConnection();
         } else {
-            final SessionRegistry.PublishedMessage msg = new SessionRegistry.PublishedMessage(topic, qos, payload);
-            // Adding to a queue, retain.
+            queueOrTerminateSession(topic, qos, payload);
+        }
+    }
+
+    private void queueOrTerminateSession(Topic topic, MqttQoS qos, ByteBuf payload) {
+        final SessionRegistry.PublishedMessage msg = new SessionRegistry.PublishedMessage(topic, qos, payload);
+        try {
             msg.retain();
             sessionQueue.add(msg);
+        } catch (IllegalStateException e) {
+            LOG.warn("Max queue size exceeded! Draining queue and disconnecting client.");
+            msg.release();
+            terminateSession();
         }
+    }
+
+    private void terminateSession() {
+        clean = true;
+        closeImmediately();
     }
 
     private boolean canSkipQueue() {
