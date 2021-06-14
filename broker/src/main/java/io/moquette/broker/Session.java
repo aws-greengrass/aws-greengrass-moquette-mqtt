@@ -23,9 +23,7 @@ import io.moquette.broker.subscriptions.Subscription;
 import io.moquette.broker.subscriptions.Topic;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.mqtt.*;
-import io.netty.util.AbstractReferenceCounted;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.ReferenceCounted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,22 +35,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-class Session extends AbstractReferenceCounted {
+class Session {
 
     private static final Logger LOG = LoggerFactory.getLogger(Session.class);
-
-    // Called when the Session reference count reaches 0
-    @Override
-    protected void deallocate() {
-        // Release all messages currently queued or in flight to prevent them
-        // from being leaked once this Session is garbage collected
-        drainQueuedAndInFlightMessages();
-    }
-
-    @Override
-    public ReferenceCounted touch(Object o) {
-        return null;
-    }
 
     static class InFlightPacket implements Delayed {
 
@@ -105,7 +90,7 @@ class Session extends AbstractReferenceCounted {
     private final String clientId;
     private boolean clean;
     private Will will;
-    private Queue<SessionRegistry.EnqueuedMessage> sessionQueue;
+    private final Queue<SessionRegistry.EnqueuedMessage> sessionQueue;
     private final AtomicReference<SessionStatus> status = new AtomicReference<>(SessionStatus.DISCONNECTED);
     private MQTTConnection mqttConnection;
     private List<Subscription> subscriptions = new ArrayList<>();
@@ -195,32 +180,6 @@ class Session extends AbstractReferenceCounted {
         assignState(SessionStatus.DISCONNECTING, SessionStatus.DISCONNECTED);
     }
 
-    void setSessionQueue(Queue sessionQueue) {
-        this.sessionQueue = sessionQueue;
-    }
-
-    void drainQueuedAndInFlightMessages() {
-        if (sessionQueue == null) {
-            return;
-        }
-
-        while (!sessionQueue.isEmpty()) {
-            final SessionRegistry.EnqueuedMessage msg = sessionQueue.remove();
-            msg.release();
-        }
-
-        List<Integer> inflightKeys = new ArrayList<>(inflightWindow.keySet());
-        inflightKeys.forEach((k) -> {
-            SessionRegistry.EnqueuedMessage msg = inflightWindow.get(k);
-            if (msg != null && inflightWindow.remove(k) == msg) {
-                msg.release();
-                inflightSlots.incrementAndGet();
-            }
-        });
-
-        // TODO - QoS 2 messages
-    }
-
     boolean isClean() {
         return clean;
     }
@@ -265,15 +224,6 @@ class Session extends AbstractReferenceCounted {
     }
 
     public void sendPublishOnSessionAtQos(Topic topic, MqttQoS qos, ByteBuf payload) {
-        // Add reference to this Session to prevent it from being deallocated
-        // while we are processing this Publish message.
-        try {
-            retain();
-        } catch (IllegalStateException e) {
-            LOG.debug("Session has already been deallocated, dropping message");
-            return;
-        }
-
         switch (qos) {
             case AT_MOST_ONCE:
                 if (connected()) {
@@ -289,7 +239,6 @@ class Session extends AbstractReferenceCounted {
             case FAILURE:
                 LOG.error("Not admissible");
         }
-        release();
     }
 
     private void sendPublishQos1(Topic topic, MqttQoS qos, ByteBuf payload) {

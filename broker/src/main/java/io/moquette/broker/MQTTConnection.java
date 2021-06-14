@@ -42,6 +42,7 @@ import static io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.*;
 import static io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader.from;
 import static io.netty.handler.codec.mqtt.MqttQoS.*;
+import io.netty.util.ReferenceCountUtil;
 
 final class MQTTConnection {
 
@@ -189,7 +190,6 @@ final class MQTTConnection {
             result = sessionRegistry.createOrReopenSession(msg, clientId, this.getUsername());
             result.session.bind(this);
             bindedSession = result.session;
-            bindedSession.retain();
         } catch (SessionCorruptedException scex) {
             LOG.warn("MQTT session for client ID {} cannot be created", clientId);
             abortConnection(CONNECTION_REFUSED_SERVER_UNAVAILABLE);
@@ -322,8 +322,6 @@ final class MQTTConnection {
             bindedSession.disconnect();
         }
         connected = false;
-        bindedSession.release();
-        bindedSession = null;
         //dispatch connection lost to intercept.
         String userName = NettyUtils.userName(channel);
         postOffice.dispatchConnectionLost(clientID,userName);
