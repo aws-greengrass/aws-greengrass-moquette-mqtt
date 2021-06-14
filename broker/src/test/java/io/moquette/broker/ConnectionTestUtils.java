@@ -71,7 +71,6 @@ public final class ConnectionTestUtils {
 
     static void verifyPublishIsReceived(EmbeddedChannel embCh, MqttQoS expectedQos, String expectedPayload) {
         final MqttPublishMessage publishReceived = embCh.flushOutbound().readOutbound();
-        assertNotNull(publishReceived);
         final String payloadMessage = DebugUtils.payload2Str(publishReceived.payload());
         assertEquals(expectedPayload, payloadMessage, "Sent and received payload must be identical");
         assertEquals(expectedQos, publishReceived.fixedHeader().qosLevel(), "Expected QoS don't match");
