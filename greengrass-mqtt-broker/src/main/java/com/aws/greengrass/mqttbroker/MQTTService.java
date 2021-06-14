@@ -81,8 +81,10 @@ public class MQTTService extends PluginService {
     }
 
     @SuppressWarnings("PMD.UnusedFormalParameter")
-    private void processConfigUpdate(WhatHappened whatHappened, Node node) {
-        startWithProperties(getProperties());
+    private synchronized void processConfigUpdate(WhatHappened whatHappened, Node node) {
+        if (inState(State.RUNNING)) {
+            startWithProperties(getProperties());
+        }
     }
 
     private synchronized void updateServerCertificate(X509Certificate cert) {
