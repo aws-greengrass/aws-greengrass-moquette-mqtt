@@ -7,12 +7,15 @@ package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.certificatemanager.CertificateManager;
 import com.aws.greengrass.certificatemanager.certificate.CsrProcessingException;
+import com.aws.greengrass.config.Node;
 import com.aws.greengrass.config.Topics;
+import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.device.DeviceAuthClient;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.util.Coerce;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.ISslContextCreator;
 import io.moquette.broker.Server;
@@ -29,6 +32,8 @@ import java.util.List;
 import java.util.Properties;
 import javax.inject.Inject;
 
+import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
+
 @ImplementsService(name = MQTTService.SERVICE_NAME, autostart = true)
 public class MQTTService extends PluginService {
     public static final String SERVICE_NAME = "aws.greengrass.clientdevices.mqtt.Moquette";
@@ -42,6 +47,7 @@ public class MQTTService extends PluginService {
     private final List<InterceptHandler> interceptHandlers;
 
     private boolean serverRunning = false;
+    private Properties runningProperties = null;
 
     /**
      * Constructor for GreengrassService.
@@ -67,8 +73,17 @@ public class MQTTService extends PluginService {
         try {
             brokerKeyStore = new BrokerKeyStore(kernel.getNucleusPaths().workPath(SERVICE_NAME));
             brokerKeyStore.initialize();
+
+            this.config.lookupTopics(CONFIGURATION_CONFIG_KEY).subscribe(this::processConfigUpdate);
         } catch (IOException | KeyStoreException e) {
             serviceErrored(e);
+        }
+    }
+
+    @SuppressWarnings("PMD.UnusedFormalParameter")
+    private synchronized void processConfigUpdate(WhatHappened whatHappened, Node node) {
+        if (inState(State.RUNNING)) {
+            startWithProperties(getProperties());
         }
     }
 
@@ -78,7 +93,7 @@ public class MQTTService extends PluginService {
         } catch (KeyStoreException e) {
             logger.atError().cause(e).log("Failed to update MQTT broker certificate");
         }
-        restartMqttServer();
+        startWithProperties(getProperties());
     }
 
     @Override
@@ -93,12 +108,8 @@ public class MQTTService extends PluginService {
             return;
         }
 
-        IConfig config = getDefaultConfig();
-        ISslContextCreator sslContextCreator =
-            new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-        mqttBroker
-            .startServer(config, interceptHandlers, sslContextCreator, clientDeviceAuthorizer, clientDeviceAuthorizer);
-        serverRunning = true;
+        Properties p = getProperties();
+        startWithProperties(p);
         reportState(State.RUNNING);
     }
 
@@ -110,34 +121,54 @@ public class MQTTService extends PluginService {
         }
     }
 
-    private synchronized void restartMqttServer() {
+    private synchronized void startWithProperties(Properties properties) {
+        if (runningProperties != null && runningProperties.equals(properties)) {
+            // Nothing to do
+            return;
+        }
+
         if (serverRunning) {
             mqttBroker.stopServer();
-            IConfig config = getDefaultConfig();
-            ISslContextCreator sslContextCreator =
-                new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-            mqttBroker.startServer(config, interceptHandlers, sslContextCreator, clientDeviceAuthorizer,
-                clientDeviceAuthorizer);
+            serverRunning = false;
         }
+
+        IConfig config = new MemoryConfig(properties);
+        ISslContextCreator sslContextCreator =
+            new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
+        mqttBroker.startServer(config, interceptHandlers, sslContextCreator, clientDeviceAuthorizer,
+            clientDeviceAuthorizer);
+        serverRunning = true;
+        runningProperties = properties;
     }
 
-    private IConfig getDefaultConfig() {
-        // TODO - Make configurable
-        IConfig defaultConfig = new MemoryConfig(new Properties());
+    private Properties getProperties() {
+        Properties p = new Properties();
+
+        Topics rootConfig = config.lookupTopics(CONFIGURATION_CONFIG_KEY);
+        Topics moquetteTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, "moquette");
 
         String password = brokerKeyStore.getJksPassword();
-        defaultConfig.setProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME, "8883");
-        defaultConfig.setProperty(BrokerConstants.JKS_PATH_PROPERTY_NAME, brokerKeyStore.getJksPath());
-        defaultConfig.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
-        defaultConfig.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
-        defaultConfig.setProperty(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, "false");
-        defaultConfig.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
-        defaultConfig.setProperty(BrokerConstants.IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME, "true");
-        defaultConfig.setProperty(BrokerConstants.NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME, "TLSv1.2");
+        p.setProperty(BrokerConstants.HOST_PROPERTY_NAME,
+            Coerce.toString(moquetteTopics.lookup(BrokerConstants.HOST_PROPERTY_NAME).dflt(BrokerConstants.HOST)));
+        p.setProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME,
+            Coerce.toString(moquetteTopics.lookup(BrokerConstants.SSL_PORT_PROPERTY_NAME).dflt("8883")));
+        p.setProperty(BrokerConstants.JKS_PATH_PROPERTY_NAME, brokerKeyStore.getJksPath());
+        p.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
+        p.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
+        p.setProperty(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, "false");
+        p.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
+        p.setProperty(BrokerConstants.IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME, "true");
+        p.setProperty(BrokerConstants.NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME, "TLSv1.2");
+        p.setProperty(BrokerConstants.NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME, Coerce.toString(
+            rootConfig.lookup(BrokerConstants.NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME)
+                .dflt(BrokerConstants.DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES)));
+        p.setProperty(BrokerConstants.NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME, Coerce.toString(
+            rootConfig.lookup(BrokerConstants.NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME)
+                .dflt(BrokerConstants.DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES)));
 
         //Disable plain TCP port
-        defaultConfig.setProperty(BrokerConstants.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);
+        p.setProperty(BrokerConstants.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);
 
-        return defaultConfig;
+        return p;
     }
 }

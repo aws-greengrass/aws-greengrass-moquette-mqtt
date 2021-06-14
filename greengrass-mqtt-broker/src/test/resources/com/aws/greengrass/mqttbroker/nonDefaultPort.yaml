@@ -1,0 +1,17 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+---
+services:
+    aws.greengrass.clientdevices.mqtt.Moquette:
+        configuration:
+            moquette:
+                ssl_port: 9000
+    aws.greengrass.clientdevices.Auth: {}
+    main:
+        lifecycle:
+            install: echo All installed
+        dependencies:
+            - aws.greengrass.clientdevices.mqtt.Moquette
