@@ -93,7 +93,7 @@ public class MQTTService extends PluginService {
         } catch (KeyStoreException e) {
             logger.atError().cause(e).log("Failed to update MQTT broker certificate");
         }
-        startWithProperties(getProperties());
+        startWithProperties(getProperties(), true);
     }
 
     @Override
@@ -122,7 +122,11 @@ public class MQTTService extends PluginService {
     }
 
     private synchronized void startWithProperties(Properties properties) {
-        if (runningProperties != null && runningProperties.equals(properties)) {
+        startWithProperties(properties, false);
+    }
+
+    private synchronized void startWithProperties(Properties properties, boolean forceRestart) {
+        if (runningProperties != null && runningProperties.equals(properties) && !forceRestart) {
             // Nothing to do
             return;
         }
