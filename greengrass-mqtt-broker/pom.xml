@@ -139,6 +139,7 @@
                             <excludes>
                                 <exclude>*</exclude>
                                 <exclude>codestyle/**</exclude>
+                                <exclude>moquette/**</exclude>
                             </excludes>
                         </licenseSet>
                     </licenseSets>
