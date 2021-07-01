@@ -15,33 +15,29 @@ jobs:
         with:
             fetch-depth: 0
       # Temporarily disable to allow for Moquette update
-      #- uses: wagoid/commitlint-github-action@v2
-      #- name: Set up JDK 1.8
-      #  uses: actions/setup-java@v1
-      #  with:
-      #    java-version: 1.8
-      - name: Build Moquette broker
-        env:
-          AWS_REGION: us-west-2
-        run: mvn -U -ntp install
+      - uses: wagoid/commitlint-github-action@v2
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
       - name: Build with Maven
         env:
             AWS_REGION: us-west-2
-        run: cd greengrass-mqtt-broker && mvn -U -ntp verify
+        run: mvn -U -ntp verify
       - name: Upload Failed Test Report
         uses: actions/upload-artifact@v1.0.0
         if: failure()
         with:
           name: Failed Test Report
-          path: greengrass-mqtt-broker/target/surefire-reports
+          path: integration/target/surefire-reports
       - name: Upload Coverage
         uses: actions/upload-artifact@v1.0.0
         if: always()
         with:
           name: Coverage Report
-          path: greengrass-mqtt-broker/target/jacoco-report
+          path: integration/target/jacoco-report
       - name: Convert Jacoco unit test report to Cobertura
-        run: python3 .github/scripts/cover2cover.py greengrass-mqtt-broker/target/jacoco-report/jacoco.xml > greengrass-mqtt-broker/target/jacoco-report/cobertura.xml
+        run: python3 .github/scripts/cover2cover.py integration/target/jacoco-report/jacoco.xml > integration/target/jacoco-report/cobertura.xml
       - name: cobertura-report-unit-test
         uses: shaguptashaikh/cobertura-action@master
         continue-on-error: true
@@ -49,7 +45,7 @@ jobs:
           # The GITHUB_TOKEN for this repo
           repo_token: ${{ github.token }}
           # Path to the cobertura file.
-          path: greengrass-mqtt-broker/target/jacoco-report/cobertura.xml
+          path: integration/target/jacoco-report/cobertura.xml
           # If files with 100% should be skipped from report.
           skip_covered: false
           # Minimum allowed coverage percentage as an integer.
