@@ -8,7 +8,9 @@ services:
     aws.greengrass.clientdevices.mqtt.Moquette:
         configuration:
             moquette:
-                ssl_port: 9000
+                # This should be an int, but a GSON bug can result in this becoming a floating point
+                # so this ensures we have test coverage for that scenario
+                ssl_port: 9000.0
     aws.greengrass.clientdevices.Auth: {}
     main:
         lifecycle:

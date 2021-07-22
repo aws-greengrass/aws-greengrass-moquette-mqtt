@@ -154,8 +154,10 @@ public class MQTTService extends PluginService {
         String password = brokerKeyStore.getJksPassword();
         p.setProperty(BrokerConstants.HOST_PROPERTY_NAME,
             Coerce.toString(moquetteTopics.lookup(BrokerConstants.HOST_PROPERTY_NAME).dflt(BrokerConstants.HOST)));
+        // Due to a deserialization bug in GSON during group deployments, this value can become a floating point
+        // instead of an int. As a workaround, coerce to an int before converting back to a string
         p.setProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME,
-            Coerce.toString(moquetteTopics.lookup(BrokerConstants.SSL_PORT_PROPERTY_NAME).dflt("8883")));
+            String.valueOf(Coerce.toInt(moquetteTopics.lookup(BrokerConstants.SSL_PORT_PROPERTY_NAME).dflt("8883"))));
         p.setProperty(BrokerConstants.JKS_PATH_PROPERTY_NAME, brokerKeyStore.getJksPath());
         p.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
         p.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
