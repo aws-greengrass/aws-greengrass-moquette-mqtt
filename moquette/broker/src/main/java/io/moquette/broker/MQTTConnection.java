@@ -42,7 +42,6 @@ import static io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.*;
 import static io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader.from;
 import static io.netty.handler.codec.mqtt.MqttQoS.*;
-import io.netty.util.ReferenceCountUtil;
 
 final class MQTTConnection {
 
@@ -187,8 +186,7 @@ final class MQTTConnection {
         final SessionRegistry.SessionCreationResult result;
         try {
             LOG.trace("Binding MQTTConnection to session");
-            result = sessionRegistry.createOrReopenSession(msg, clientId, this.getUsername());
-            result.session.bind(this);
+            result = sessionRegistry.createOrReopenSession(msg, clientId, this.getUsername(), this);
             bindedSession = result.session;
         } catch (SessionCorruptedException scex) {
             LOG.warn("MQTT session for client ID {} cannot be created", clientId);
@@ -308,7 +306,7 @@ final class MQTTConnection {
 
     void handleConnectionLost() {
         String clientID = NettyUtils.clientID(channel);
-        if (clientID == null || clientID.isEmpty()) {
+        if (clientID == null || clientID.isEmpty() || bindedSession == null) {
             return;
         }
         LOG.info("Notifying connection lost event");
@@ -330,6 +328,11 @@ final class MQTTConnection {
 
     boolean isConnected() {
         return connected;
+    }
+
+    void unbindSessionAndDisconnect() {
+        bindedSession = null;
+        dropConnection();
     }
 
     void dropConnection() {

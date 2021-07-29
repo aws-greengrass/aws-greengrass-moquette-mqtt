@@ -113,9 +113,43 @@ class Session {
         this.sessionQueue = sessionQueue;
     }
 
-    void update(boolean clean, Will will) {
-        this.clean = clean;
-        this.will = will;
+    /**
+     * This method terminates a Session, which involves disconnecting the client
+     * if one is connected, and releasing all references to unacknowledged publishes.
+     *
+     * Failure to release messages will result in netty byte buffer leaks when this
+     * Session is garbage collected.
+     */
+    void terminateSession() {
+        // Drop MQTT connection, if one is connected
+        MQTTConnection connection = this.mqttConnection;
+        if (connection != null) {
+            connection.unbindSessionAndDisconnect();
+        }
+
+        // Release queued messages
+        while (!sessionQueue.isEmpty()) {
+            final SessionRegistry.EnqueuedMessage msg = sessionQueue.remove();
+            msg.release();
+        }
+
+        // TODO: inflight messages also need to be released, but first we need to prevent
+        // multiple threads from being able to queue messages during shutdown
+    }
+
+    boolean dropAndReplaceConnection(MQTTConnection mqttConnection) {
+        final boolean res = assignState(SessionStatus.CONNECTED, SessionStatus.DISCONNECTING);
+        if (!res) {
+            // someone already moved away from CONNECTED
+            LOG.debug("session (CId {}) was not in CONNECTED state", clientId);
+            return false;
+        }
+
+        // only a single caller can get to this point
+        this.mqttConnection.unbindSessionAndDisconnect();
+        bind(mqttConnection);
+
+        return assignState(SessionStatus.DISCONNECTING, SessionStatus.CONNECTING);
     }
 
     void markConnecting() {
