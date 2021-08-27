@@ -40,11 +40,11 @@ public class H2PersistentQueueTest {
 
     @AfterEach
     public void tearDown() {
+        this.mvStore.close();
         File dbFile = new File(BrokerConstants.DEFAULT_PERSISTENT_PATH);
         if (dbFile.exists()) {
-            dbFile.delete();
+            assertTrue(dbFile.delete());
         }
-        assertFalse(dbFile.exists());
     }
 
     @Test
