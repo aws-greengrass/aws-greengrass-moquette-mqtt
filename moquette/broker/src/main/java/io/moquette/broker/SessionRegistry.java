@@ -151,7 +151,7 @@ public class SessionRegistry {
 
             postConnectAction = new SessionCreationResult(newSession, CreationModeEnum.CREATED_CLEAN_NEW, false);
 
-            // publish the session
+            // case 1
             LOG.trace("case 1, creating new session with CId {}, clean session {}", clientId, newIsClean);
             newSession.bind(mqttConnection);
             final Session previous = pool.put(clientId, newSession);

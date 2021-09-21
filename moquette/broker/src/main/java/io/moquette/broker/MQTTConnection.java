@@ -330,6 +330,10 @@ final class MQTTConnection {
         return connected;
     }
 
+    // This allows us to replace the MQTTConnection in a Session object
+    // without unintentionally transitioning the Session into the DISCONNECTED
+    // state. Ideally we wouldn't have to do this, but for now, this is easiest.
+    // IMPORTANT: Session state needs to be managed by the caller of this method!
     void unbindSessionAndDisconnect() {
         bindedSession = null;
         dropConnection();
