@@ -142,8 +142,11 @@ class Session extends AbstractReferenceCounted {
      *
      * Failure to release messages will result in netty byte buffer leaks when this
      * Session is garbage collected.
+     *
+     * Note: this method is not thread safe and should only be called when the Session
+     * reference count reaches zero.
      */
-    void terminateSession() {
+    private void terminateSession() {
         // Drop MQTT connection, if one is connected
         MQTTConnection connection = this.mqttConnection;
         if (connection != null) {
