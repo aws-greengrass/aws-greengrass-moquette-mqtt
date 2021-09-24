@@ -157,22 +157,8 @@ class Session extends AbstractReferenceCounted {
         }
 
         // Release in flight messages (QoS 1/2)
-        List<Integer> inflightKeys = new ArrayList<>(inflightWindow.keySet());
-        inflightKeys.forEach((k) -> {
-            SessionRegistry.EnqueuedMessage msg = inflightWindow.get(k);
-            if (msg != null && inflightWindow.remove(k) == msg) {
-                msg.release();
-                inflightSlots.incrementAndGet();
-            }
-        });
-
-        List<Integer> qos2ReceivingKeys = new ArrayList<>(qos2Receiving.keySet());
-        qos2ReceivingKeys.forEach((k) -> {
-            MqttPublishMessage msg = qos2Receiving.get(k);
-            if (msg != null && qos2Receiving.remove(k) == msg) {
-                msg.release();
-            }
-        });
+        inflightWindow.forEach((k, v) -> v.release());
+        qos2Receiving.forEach((k, v) -> v.release());
     }
 
     boolean dropAndReplaceConnection(MQTTConnection mqttConnection) {
