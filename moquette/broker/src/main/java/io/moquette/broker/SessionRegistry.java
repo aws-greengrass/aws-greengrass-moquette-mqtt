@@ -196,7 +196,7 @@ public class SessionRegistry {
 
     private void terminateSession(Session session) {
         unsubscribe(session);
-        session.terminateSession();
+        session.release();
     }
 
     private void reactivateSubscriptions(Session session, String username) {
@@ -246,7 +246,9 @@ public class SessionRegistry {
     }
 
     public void remove(Session session) {
-        pool.remove(session.getClientID(), session);
+        if (pool.remove(session.getClientID(), session)) {
+            session.release();
+        }
     }
 
     Collection<ClientDescriptor> listConnectedClients() {
