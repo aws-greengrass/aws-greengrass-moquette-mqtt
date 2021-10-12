@@ -266,8 +266,7 @@ class Session extends AbstractReferenceCounted {
         if (canSkipQueue()) {
             inflightSlots.decrementAndGet();
             int pubRelPacketId = packetId/*mqttConnection.nextPacketId()*/;
-            inflightWindow.put(pubRelPacketId, new SessionRegistry.PubRelMarker());
-            inflightTimeouts.add(new InFlightPacket(pubRelPacketId, FLIGHT_BEFORE_RESEND_MS));
+            addToInFlightWindow(pubRelPacketId, new SessionRegistry.PubRelMarker());
             MqttMessage pubRel = MQTTConnection.pubrel(pubRelPacketId);
             mqttConnection.sendIfWritableElseDrop(pubRel);
 
@@ -337,13 +336,12 @@ class Session extends AbstractReferenceCounted {
 
             // Adding to a map, retain.
             payload.retain();
-            EnqueuedMessage old = inflightWindow.put(packetId, new PublishedMessage(topic, qos, payload));
+            EnqueuedMessage old = addToInFlightWindow(packetId, new PublishedMessage(topic, qos, payload));
             // If there already was something, release it.
             if (old != null) {
                 old.release();
                 inflightSlots.incrementAndGet();
             }
-            inflightTimeouts.add(new InFlightPacket(packetId, FLIGHT_BEFORE_RESEND_MS));
 
             MqttPublishMessage publishMsg = MQTTConnection.notRetainedPublishWithMessageId(topic.toString(), qos,
                                                                                            payload, packetId);
@@ -365,13 +363,12 @@ class Session extends AbstractReferenceCounted {
 
             // Retain before adding to map
             payload.retain();
-            EnqueuedMessage old = inflightWindow.put(packetId, new SessionRegistry.PublishedMessage(topic, qos, payload));
+            EnqueuedMessage old = addToInFlightWindow(packetId, new PublishedMessage(topic, qos, payload));
             // If there already was something, release it.
             if (old != null) {
                 old.release();
                 inflightSlots.incrementAndGet();
             }
-            inflightTimeouts.add(new InFlightPacket(packetId, FLIGHT_BEFORE_RESEND_MS));
 
             MqttPublishMessage publishMsg = MQTTConnection.notRetainedPublishWithMessageId(topic.toString(), qos,
                                                                                            payload, packetId);
@@ -397,6 +394,11 @@ class Session extends AbstractReferenceCounted {
         return inflightSlots.get() > 0 &&
             connected() &&
             mqttConnection.channel.isWritable();
+    }
+
+    private EnqueuedMessage addToInFlightWindow(int packetId, SessionRegistry.EnqueuedMessage msg) {
+        inflightTimeouts.add(new InFlightPacket(packetId, FLIGHT_BEFORE_RESEND_MS));
+        return inflightWindow.put(packetId, msg);
     }
 
     void pubAckReceived(int ackPacketId) {
@@ -480,7 +482,7 @@ class Session extends AbstractReferenceCounted {
             int sendPacketId = mqttConnection.nextPacketId();
 
             // Putting it in a map, but the retain is cancelled out by the below release.
-            EnqueuedMessage old = inflightWindow.put(sendPacketId, msg);
+            EnqueuedMessage old = addToInFlightWindow(sendPacketId, msg);
             if (old != null) {
                 old.release();
                 inflightSlots.incrementAndGet();
