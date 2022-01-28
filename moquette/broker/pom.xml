@@ -18,7 +18,7 @@
         <netty.version>4.1.71.Final</netty.version>
         <netty.tcnative.version>2.0.34.Final</netty.tcnative.version>
         <paho.version>1.2.5</paho.version>
-        <h2.version>2.0.202</h2.version>
+        <h2.version>2.1.210</h2.version>
         <javac.version>9+181-r4173-1</javac.version>
     </properties>
 
