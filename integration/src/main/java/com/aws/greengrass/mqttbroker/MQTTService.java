@@ -30,6 +30,7 @@ import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Consumer;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -45,6 +46,9 @@ public class MQTTService extends PluginService {
     private final ClientDeviceTrustManager clientDeviceTrustManager;
     private final ClientDeviceAuthorizer clientDeviceAuthorizer;
     private final List<InterceptHandler> interceptHandlers;
+    // Store a single, unchanging reference to the method so that it can be deduplicated in CDA so that
+    // it isn't called multiple times if Moquette is restarted by GG or a user.
+    private final Consumer<X509Certificate> updateServerCertificateCb = this::updateServerCertificate;
 
     private boolean serverRunning = false;
     private Properties runningProperties = null;
@@ -101,7 +105,7 @@ public class MQTTService extends PluginService {
         // Subscribe to client devices auth certificate updates
         try {
             String brokerCsr = brokerKeyStore.getCsr();
-            certificateManager.subscribeToServerCertificateUpdates(brokerCsr, this::updateServerCertificate);
+            certificateManager.subscribeToServerCertificateUpdates(brokerCsr, updateServerCertificateCb);
         } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
             logger.atError().log("Unable to generate MQTT broker certificate");
             serviceErrored(e);
@@ -126,8 +130,9 @@ public class MQTTService extends PluginService {
     }
 
     private synchronized void startWithProperties(Properties properties, boolean forceRestart) {
-        if (runningProperties != null && runningProperties.equals(properties) && !forceRestart) {
+        if (runningProperties != null && runningProperties.equals(properties) && !forceRestart && serverRunning) {
             // Nothing to do
+            // Only do nothing if the server is currently running. If we aren't running, then we need to startup
             return;
         }
 
