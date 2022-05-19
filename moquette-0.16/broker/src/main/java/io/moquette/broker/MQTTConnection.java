@@ -17,6 +17,7 @@ package io.moquette.broker;
 
 import io.moquette.broker.subscriptions.Topic;
 import io.moquette.broker.security.IAuthenticator;
+import io.moquette.broker.security.PemUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.channel.Channel;
@@ -24,11 +25,16 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.mqtt.*;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import javax.net.ssl.SSLPeerUnverifiedException;
 import java.net.InetSocketAddress;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateEncodingException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -283,7 +289,21 @@ final class MQTTConnection {
                 LOG.info("Client didn't supply any password and MQTT anonymous mode is disabled CId={}", clientId);
                 return false;
             }
-            final String login = msg.payload().userName();
+            String login = msg.payload().userName();
+            if (brokerConfig.peerCertificateAsUsername()) {
+                try {
+                    // Use peer cert as username
+                    SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
+                    if (sslhandler != null) {
+                        Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificates();
+                        login = PemUtils.certificatesToPem(certificateChain);
+                    }
+                } catch (SSLPeerUnverifiedException e) {
+                    // No peer cert provided
+                } catch (CertificateEncodingException|IOException e) {
+                    return false;
+                }
+            }
             if (!authenticator.checkValid(clientId, login, pwd)) {
                 LOG.info("Authenticator has rejected the MQTT credentials CId={}, username={}", clientId, login);
                 return false;
