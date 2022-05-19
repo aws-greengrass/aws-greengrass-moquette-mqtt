@@ -72,6 +72,7 @@ public final class BrokerConstants {
     public static final String NETTY_EPOLL_PROPERTY_NAME = "netty.epoll";
     public static final String NETTY_MAX_BYTES_PROPERTY_NAME = "netty.mqtt.message_size";
     public static final int DEFAULT_NETTY_MAX_BYTES_IN_MESSAGE = 8092;
+    public static final String NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME = "netty.enabled.tls.protocols";
     public static final String IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME = "immediate_buffer_flush";
     public static final String METRICS_ENABLE_PROPERTY_NAME = "use_metrics";
     public static final String METRICS_LIBRATO_EMAIL_PROPERTY_NAME = "metrics.librato.email";
@@ -82,6 +83,11 @@ public final class BrokerConstants {
     public static final String BUGSNAG_TOKEN_PROPERTY_NAME = "bugsnag.token";
 
     public static final String STORAGE_CLASS_NAME = "storage_class";
+
+    public static final String NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME = "netty.channel.write.limit";
+    public static final int DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES = 512 * 1024;
+    public static final String NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME = "netty.channel.read.limit";
+    public static final int DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES = 512 * 1024;
 
     public static final int FLIGHT_BEFORE_RESEND_MS = 5_000;
     public static final int INFLIGHT_WINDOW_SIZE = 10;

@@ -41,6 +41,7 @@ import io.netty.handler.codec.mqtt.MqttEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.handler.traffic.ChannelTrafficShapingHandler;
 import io.netty.util.concurrent.Future;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,7 +135,8 @@ class NewNettyAcceptor {
     private boolean nettySoKeepalive;
     private int nettyChannelTimeoutSeconds;
     private int maxBytesInMessage;
-
+    private int trafficMaxReadBytesPerSecondPerChannel;
+    private int trafficMaxWriteBytesPerSecondPerChannel;
     private Class<? extends ServerSocketChannel> channelClass;
 
     public void initialize(NewNettyMQTTHandler mqttHandler, IConfig props, ISslContextCreator sslCtxCreator) {
@@ -147,7 +149,10 @@ class NewNettyAcceptor {
         nettyChannelTimeoutSeconds = props.intProp(BrokerConstants.NETTY_CHANNEL_TIMEOUT_SECONDS_PROPERTY_NAME, 10);
         maxBytesInMessage = props.intProp(BrokerConstants.NETTY_MAX_BYTES_PROPERTY_NAME,
                 BrokerConstants.DEFAULT_NETTY_MAX_BYTES_IN_MESSAGE);
-
+        trafficMaxReadBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME,
+            BrokerConstants.DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES), 0);
+        trafficMaxWriteBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME,
+            BrokerConstants.DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES), 0);
         boolean epoll = props.boolProp(BrokerConstants.NETTY_EPOLL_PROPERTY_NAME, false);
         if (epoll) {
             LOG.info("Netty is using Epoll");
@@ -249,6 +254,11 @@ class NewNettyAcceptor {
                      DISABLED_PORT_BIND);
             return;
         }
+        if (trafficMaxReadBytesPerSecondPerChannel > 0 || trafficMaxWriteBytesPerSecondPerChannel > 0) {
+            LOG.debug("Per channel traffic shaping at {} write, {} read per second",
+                trafficMaxReadBytesPerSecondPerChannel, trafficMaxWriteBytesPerSecondPerChannel);
+        }
+
         int port = Integer.parseInt(tcpPortProp);
         initFactory(host, port, PLAIN_MQTT_PROTO, new PipelineInitializer() {
 
@@ -270,6 +280,12 @@ class NewNettyAcceptor {
         }
         pipeline.addFirst("bytemetrics", new BytesMetricsHandler(bytesMetricsCollector));
         pipeline.addLast("autoflush", new AutoFlushHandler(1, TimeUnit.SECONDS));
+
+        if (trafficMaxReadBytesPerSecondPerChannel > 0 || trafficMaxWriteBytesPerSecondPerChannel > 0) {
+            pipeline.addLast("trafficShaping", new ChannelTrafficShapingHandler(trafficMaxWriteBytesPerSecondPerChannel,
+                trafficMaxReadBytesPerSecondPerChannel, TimeUnit.SECONDS.toMillis(1)));
+        }
+
         pipeline.addLast("decoder", new MqttDecoder(maxBytesInMessage));
         pipeline.addLast("encoder", MqttEncoder.INSTANCE);
         pipeline.addLast("metrics", new MessageMetricsHandler(metricsCollector));
