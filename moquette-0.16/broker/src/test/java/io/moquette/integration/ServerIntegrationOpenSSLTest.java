@@ -18,11 +18,13 @@ package io.moquette.integration;
 
 import java.io.IOException;
 import java.util.Properties;
+import java.util.function.BooleanSupplier;
 
 import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslProvider;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,9 +38,7 @@ public class ServerIntegrationOpenSSLTest extends ServerIntegrationSSLTest {
 
     @BeforeAll
     public static void beforeTests() {
-        LOG.info("try to initialize OpenSSL native library");
-        OpenSsl.ensureAvailability();
-        LOG.info("OpenSSL initialized");
+        Assumptions.assumeTrue(new OpensslChecker(), "OpenSSL is available");
     }
 
     @Override
@@ -57,5 +57,19 @@ public class ServerIntegrationOpenSSLTest extends ServerIntegrationSSLTest {
         sslProps.put(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
         sslProps.put(BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME, dbPath);
         m_server.startServer(sslProps);
+    }
+
+    static class OpensslChecker implements BooleanSupplier {
+        @Override
+        public boolean getAsBoolean() {
+            LOG.info("try to initialize OpenSSL native library");
+            try {
+                OpenSsl.ensureAvailability();
+            } catch (java.lang.UnsatisfiedLinkError e) {
+                LOG.info("OpenSSL is unavailable");
+                return false;
+            }
+            return true;
+        }
     }
 }
