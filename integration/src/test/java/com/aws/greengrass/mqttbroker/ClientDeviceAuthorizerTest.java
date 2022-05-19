@@ -11,7 +11,6 @@ import com.aws.greengrass.device.exception.AuthenticationException;
 import com.aws.greengrass.device.exception.AuthorizationException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
-import io.moquette.broker.security.ClientData;
 import io.moquette.broker.subscriptions.Topic;
 import io.moquette.interception.messages.InterceptDisconnectMessage;
 import org.junit.jupiter.api.Test;
@@ -20,13 +19,12 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.security.cert.X509Certificate;
+import java.nio.charset.StandardCharsets;
 
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -37,12 +35,12 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Mock
     DeviceAuthClient mockDeviceAuthClient;
 
-    @Mock
-    X509Certificate mockCertificate;
-
     private static final String DEFAULT_SESSION = "SESSION_ID";
     private static final String DEFAULT_CLIENT = "clientId";
+    private static final String DEFAULT_PEER_CERT = "VALID_PEER_CERT";
+    private static final String EMPTY_PEER_CERT = "";
     private static final String DEFAULT_TOPIC = "topic";
+    private static final byte[] DEFAULT_PASSWORD = "".getBytes(StandardCharsets.UTF_8);
 
     void configureAuthResponse(String session, String operation, String resource, boolean doAllow)
         throws AuthorizationException {
@@ -78,20 +76,17 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_clientDataWithoutCertificate_WHEN_checkValid_THEN_returnsFalse() {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        assertThat(authorizer.checkValid(clientData), is(false));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, EMPTY_PEER_CERT, DEFAULT_PASSWORD), is(false));
     }
 
     @Test
     void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalseAndClosesSession() throws Exception {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockTrustManager.getSessionForCertificate(DEFAULT_PEER_CERT)).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(false);
 
-        assertThat(authorizer.checkValid(clientData), is(false));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(false));
         verify(mockDeviceAuthClient).attachThing(DEFAULT_SESSION, DEFAULT_CLIENT);
         verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
     }
@@ -101,19 +96,19 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         // This test can be removed once we identify a better way to map
         // client connections to auth sessions. See comments in the checkValid
         // method surrounding duplicate client IDs for more details
+        final String USERNAME1 = "PeerCert1";
+        final String USERNAME2 = "PeerCert2";
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn("SESSION1");
+        when(mockTrustManager.getSessionForCertificate(USERNAME1)).thenReturn("SESSION1");
         configureConnectResponse("SESSION1", DEFAULT_CLIENT, true);
-        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, USERNAME1, DEFAULT_PASSWORD), is(true));
         assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), is("SESSION1"));
 
         // Second client should return true, but both sessions should be closed
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn("SESSION2");
+        when(mockTrustManager.getSessionForCertificate(USERNAME2)).thenReturn("SESSION2");
         configureConnectResponse("SESSION2", DEFAULT_CLIENT, true);
-        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, USERNAME2, DEFAULT_PASSWORD), is(true));
         assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), is(nullValue()));
 
         verify(mockDeviceAuthClient).closeSession("SESSION1");
@@ -123,13 +118,11 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_authorizedClient_WHEN_checkValid_THEN_returnsTrue() throws Exception {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockTrustManager.getSessionForCertificate(DEFAULT_PEER_CERT)).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
 
-        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
         verify(mockDeviceAuthClient).attachThing(DEFAULT_SESSION, DEFAULT_CLIENT);
     }
 
@@ -137,13 +130,11 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     void GIVEN_attachThingThrowsException_WHEN_checkValid_THEN_returnsFalse(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, AuthenticationException.class);
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockTrustManager.getSessionForCertificate(DEFAULT_PEER_CERT)).thenReturn(DEFAULT_SESSION);
         doThrow(AuthenticationException.class).when(mockDeviceAuthClient).attachThing(DEFAULT_SESSION, DEFAULT_CLIENT);
 
-        assertThat(authorizer.checkValid(clientData), is(false));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(false));
     }
 
     @Test
@@ -157,15 +148,13 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_unauthorizedClient_WHEN_canReadCanWrite_THEN_returnsFalse() throws AuthorizationException {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockTrustManager.getSessionForCertificate(DEFAULT_PEER_CERT)).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
         configureSubscribeResponse(false);
         configurePublishResponse(false);
 
-        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
         assertThat(authorizer.canRead(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(false));
         assertThat(authorizer.canWrite(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(false));
     }
@@ -173,15 +162,13 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_unauthorizedClient_WHEN_canReadCanWrite_THEN_returnsTrue() throws AuthorizationException {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockTrustManager.getSessionForCertificate(DEFAULT_PEER_CERT)).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
         configureSubscribeResponse(true);
         configurePublishResponse(true);
 
-        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
         assertThat(authorizer.canRead(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(true));
         assertThat(authorizer.canWrite(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(true));
     }
@@ -194,17 +181,13 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         String session2 = "SESSION_ID2";
         String client1 = "clientId1";
         String client2 = "clientId2";
+        String cert1 = "PeerCert1";
+        String cert2 = "PeerCert2";
         String topic1 = "topic/client1";
         String topic2 = "topic/client2";
-        X509Certificate[] chain1 = {mock(X509Certificate.class)};
-        X509Certificate[] chain2 = {mock(X509Certificate.class)};
-        ClientData clientData1 = new ClientData(client1);
-        ClientData clientData2 = new ClientData(client2);
-        clientData1.setCertificateChain(chain1);
-        clientData2.setCertificateChain(chain2);
 
         // Client1 can connect and publish/subscribe on own topic, but not client2's topics
-        when(mockTrustManager.getSessionForCertificate(chain1)).thenReturn(session1);
+        when(mockTrustManager.getSessionForCertificate(cert1)).thenReturn(session1);
         configureConnectResponse(session1, client1, true);
         configurePublishResponse(session1, topic1, true);
         configureSubscribeResponse(session1, topic1, true);
@@ -212,15 +195,15 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configureSubscribeResponse(session1, topic2, false);
 
         // Client2 can connect and publish/subscribe on own topic, but not client1's topics
-        when(mockTrustManager.getSessionForCertificate(chain2)).thenReturn(session2);
+        when(mockTrustManager.getSessionForCertificate(cert2)).thenReturn(session2);
         configureConnectResponse(session2, client2, true);
         configurePublishResponse(session2, topic1, false);
         configureSubscribeResponse(session2, topic1, false);
         configurePublishResponse(session2, topic2, true);
         configureSubscribeResponse(session2, topic2, true);
 
-        assertThat(authorizer.checkValid(clientData1), is(true));
-        assertThat(authorizer.checkValid(clientData2), is(true));
+        assertThat(authorizer.checkValid(client1, cert1, DEFAULT_PASSWORD), is(true));
+        assertThat(authorizer.checkValid(client2, cert2, DEFAULT_PASSWORD), is(true));
         assertThat(authorizer.canRead(Topic.asTopic(topic1), "", client1), is(true));
         assertThat(authorizer.canWrite(Topic.asTopic(topic1), "", client1), is(true));
         assertThat(authorizer.canRead(Topic.asTopic(topic2), "", client1), is(false));
@@ -234,13 +217,11 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_authorizedClient_WHEN_onDisconnect_THEN_closeCDASession() throws AuthorizationException {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockTrustManager.getSessionForCertificate(DEFAULT_PEER_CERT)).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
 
-        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
 
         authorizer.new ConnectionTerminationListener()
             .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, null));
@@ -252,14 +233,12 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     void GIVEN_authorizedClient_WHEN_onDisconnect_and_sessionAlreadyClosed_THEN_failSafe()
         throws AuthorizationException {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
-        ClientData clientData = new ClientData(DEFAULT_CLIENT);
-        clientData.setCertificateChain(new X509Certificate[]{mockCertificate});
 
-        when(mockTrustManager.getSessionForCertificate(any())).thenReturn(DEFAULT_SESSION);
+        when(mockTrustManager.getSessionForCertificate(DEFAULT_PEER_CERT)).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
         doThrow(AuthorizationException.class).when(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
 
-        assertThat(authorizer.checkValid(clientData), is(true));
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
 
         authorizer.new ConnectionTerminationListener()
             .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, null));

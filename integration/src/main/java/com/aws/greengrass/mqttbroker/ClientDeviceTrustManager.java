@@ -70,9 +70,19 @@ public class ClientDeviceTrustManager implements X509TrustManager {
             return null;
         }
 
-        String sessionId = sessionMap.remove(certPem);
+        return getSessionForCertificate(certPem);
+    }
+
+    /**
+     * Returns a valid session ID for the given certificate chain, if it exists.
+     *
+     * @param certificatePem peer certificate PEM
+     * @return a session id
+     */
+    public String getSessionForCertificate(String certificatePem) {
+        String sessionId = sessionMap.remove(certificatePem);
         if (sessionId == null) {
-            sessionId = createSession(certPem);
+            sessionId = createSession(certificatePem);
         }
         return sessionId;
     }
