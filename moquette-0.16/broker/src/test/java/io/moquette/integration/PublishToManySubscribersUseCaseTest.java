@@ -14,6 +14,7 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
@@ -36,6 +37,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // inspired by ServerIntegrationPahoTest
+@Disabled("Skipping Subscriber Stress Test")
 public class PublishToManySubscribersUseCaseTest extends AbstractIntegration {
 
     private static final Logger LOG = LoggerFactory.getLogger(PublishToManySubscribersUseCaseTest.class);
