@@ -11,7 +11,6 @@ import com.aws.greengrass.device.exception.AuthenticationException;
 import com.aws.greengrass.device.exception.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import io.moquette.broker.security.ClientData;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.Topic;
@@ -20,7 +19,6 @@ import io.moquette.interception.InterceptHandler;
 import io.moquette.interception.messages.InterceptConnectionLostMessage;
 import io.moquette.interception.messages.InterceptDisconnectMessage;
 
-import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -46,16 +44,14 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     }
 
     @Override
-    public boolean checkValid(ClientData clientData) {
-        if (!clientData.getCertificates().isPresent()) {
-            LOG.error("No certificate in client data");
+    public boolean checkValid(String clientId, String username, byte[] password) {
+        if (username.isEmpty()) {
+            LOG.error("No peer certificate provided");
             return false;
         }
-        X509Certificate[] certificateChain = (X509Certificate[]) clientData.getCertificates().get();
 
         // Retrieve session ID and construct authorization request for MQTT CONNECT
-        String sessionId = trustManager.getSessionForCertificate(certificateChain);
-        String clientId = clientData.getClientId();
+        String sessionId = trustManager.getSessionForCertificate(username);
         LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Retrieved client session");
 
         try {

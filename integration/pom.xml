@@ -82,7 +82,7 @@
         <dependency>
             <groupId>io.moquette</groupId>
             <artifactId>moquette-broker</artifactId>
-            <version>0.14-gg</version>
+            <version>0.16-gg</version>
         </dependency>
     </dependencies>
     <build>
