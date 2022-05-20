@@ -280,39 +280,46 @@ final class MQTTConnection {
     }
 
     private boolean login(MqttConnectMessage msg, final String clientId) {
-        // handle user authentication
+        String userName = null;
+        byte[] pwd = null;
+
         if (msg.variableHeader().hasUserName()) {
-            byte[] pwd = null;
+            userName = msg.payload().userName();
+            // MQTT 3.1.2.9 does not mandate that there is a password - let the authenticator determine if it's needed
             if (msg.variableHeader().hasPassword()) {
                 pwd = msg.payload().passwordInBytes();
-            } else if (!brokerConfig.isAllowAnonymous()) {
-                LOG.info("Client didn't supply any password and MQTT anonymous mode is disabled CId={}", clientId);
-                return false;
             }
-            String login = msg.payload().userName();
-            if (brokerConfig.peerCertificateAsUsername()) {
-                try {
-                    // Use peer cert as username
-                    SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
-                    if (sslhandler != null) {
-                        Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificates();
-                        login = PemUtils.certificatesToPem(certificateChain);
-                    }
-                } catch (SSLPeerUnverifiedException e) {
-                    // No peer cert provided
-                } catch (CertificateEncodingException|IOException e) {
-                    return false;
+        }
+
+        if (brokerConfig.peerCertificateAsUsername()) {
+            try {
+                // Use peer cert as username
+                SslHandler sslhandler = (SslHandler) channel.pipeline().get("ssl");
+                if (sslhandler != null) {
+                    Certificate[] certificateChain = sslhandler.engine().getSession().getPeerCertificates();
+                    userName = PemUtils.certificatesToPem(certificateChain);
                 }
+            } catch (SSLPeerUnverifiedException e) {
+                LOG.debug("No peer cert provided. CId={}", clientId);
+            } catch (CertificateEncodingException | IOException e) {
+                LOG.warn("Unable to decode client certificate. CId={}", clientId);
             }
-            if (!authenticator.checkValid(clientId, login, pwd)) {
-                LOG.info("Authenticator has rejected the MQTT credentials CId={}, username={}", clientId, login);
+        }
+
+        if (userName == null || userName.isEmpty()) {
+            if (brokerConfig.isAllowAnonymous()) {
+                return true;
+            } else {
+                LOG.info("Client didn't supply any credentials and MQTT anonymous mode is disabled. CId={}", clientId);
                 return false;
             }
-            NettyUtils.userName(channel, login);
-        } else if (!brokerConfig.isAllowAnonymous()) {
-            LOG.info("Client didn't supply any credentials and MQTT anonymous mode is disabled. CId={}", clientId);
+        }
+
+        if (!authenticator.checkValid(clientId, userName, pwd)) {
+            LOG.info("Authenticator has rejected the MQTT credentials CId={}, username={}", clientId, userName);
             return false;
         }
+        NettyUtils.userName(channel, userName);
         return true;
     }
 
