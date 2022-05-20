@@ -30,6 +30,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import java.net.InetSocketAddress;
 import java.security.cert.Certificate;
@@ -299,7 +300,7 @@ final class MQTTConnection {
                     }
                 } catch (SSLPeerUnverifiedException e) {
                     // No peer cert provided
-                } catch (CertificateEncodingException e) {
+                } catch (CertificateEncodingException|IOException e) {
                     return false;
                 }
             }
