@@ -31,7 +31,7 @@ class BrokerConfiguration {
         allowZeroByteClientId = props.boolProp(BrokerConstants.ALLOW_ZERO_BYTE_CLIENT_ID_PROPERTY_NAME, false);
         reauthorizeSubscriptionsOnConnect = props.boolProp(BrokerConstants.REAUTHORIZE_SUBSCRIPTIONS_ON_CONNECT, false);
         immediateBufferFlush = props.boolProp(BrokerConstants.IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME, false);
-        peerCertificateAsUsername = props.boolProp(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, false);
+        peerCertificateAsUsername = props.boolProp(BrokerConstants.PEER_CERTIFICATE_AS_USERNAME, false);
     }
 
     public BrokerConfiguration(boolean allowAnonymous, boolean allowZeroByteClientId,
