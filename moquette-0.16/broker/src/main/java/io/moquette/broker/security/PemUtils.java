@@ -16,30 +16,82 @@
 
 package io.moquette.broker.security;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.util.Base64;
 
 public final class PemUtils {
-    private static final String BEGIN_CERT = "-----BEGIN CERTIFICATE-----";
-    private static final String END_CERT = "-----END CERTIFICATE-----";
-    private static final String LINE_SEPARATOR = System.getProperty("line.separator");
+    private static final String certificateBoundaryType = "CERTIFICATE";
 
-    public static String certificatesToPem(Certificate... certificates) throws CertificateEncodingException {
-        StringBuilder stringBuilder = new StringBuilder();
-        for (Certificate certificate : certificates) {
-            stringBuilder.append(certificateToPem(certificate));
-            stringBuilder.append(LINE_SEPARATOR);
+    public static String certificatesToPem(Certificate... certificates)
+        throws CertificateEncodingException, IOException {
+        try (StringWriter str = new StringWriter();
+             PemWriter pemWriter = new PemWriter(str)) {
+            for (Certificate certificate : certificates) {
+                pemWriter.writeObject(certificateBoundaryType, certificate.getEncoded());
+            }
+            pemWriter.close();
+            return str.toString();
         }
-        return stringBuilder.toString();
     }
 
-    private static String certificateToPem(Certificate certificate) throws CertificateEncodingException {
-        // Avoid pulling in a dependency for PEM encoding. X509 certificate are encoded as an ASN.1 DER.
-        // A PEM is just a base64 encoding of this, sandwiched between some text anchors
-        Base64.Encoder encoder = Base64.getMimeEncoder(64, LINE_SEPARATOR.getBytes(StandardCharsets.UTF_8));
-        String base64Der = encoder.encodeToString(certificate.getEncoded());
-        return String.join(LINE_SEPARATOR, BEGIN_CERT, base64Der, END_CERT);
+    /**
+     * Copyright (c) 2000 - 2021 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
+     * SPDX-License-Identifier: MIT
+     *
+     * <p>A generic PEM writer, based on RFC 1421
+     * From: https://javadoc.io/static/org.bouncycastle/bcprov-jdk15on/1.62/org/bouncycastle/util/io/pem/PemWriter.html</p>
+     */
+    public static class PemWriter extends BufferedWriter {
+        private static final int LINE_LENGTH = 64;
+        private final char[] buf = new char[LINE_LENGTH];
+        /**
+         * Base constructor.
+         *
+         * @param out output stream to use.
+         */
+        public PemWriter(Writer out) {
+            super(out);
+        }
+        /**
+         * Writes a pem encoded string.
+         *
+         * @param type  key type.
+         * @param bytes encoded string
+         * @throws IOException IO Exception
+         */
+        public void writeObject(String type, byte[] bytes) throws IOException {
+            writePreEncapsulationBoundary(type);
+            writeEncoded(bytes);
+            writePostEncapsulationBoundary(type);
+        }
+        private void writeEncoded(byte[] bytes) throws IOException {
+            bytes = Base64.getEncoder().encode(bytes);
+            for (int i = 0; i < bytes.length; i += buf.length) {
+                int index = 0;
+                while (index != buf.length) {
+                    if ((i + index) >= bytes.length) {
+                        break;
+                    }
+                    buf[index] = (char) bytes[i + index];
+                    index++;
+                }
+                this.write(buf, 0, index);
+                this.newLine();
+            }
+        }
+        private void writePreEncapsulationBoundary(String type) throws IOException {
+            this.write("-----BEGIN " + type + "-----");
+            this.newLine();
+        }
+        private void writePostEncapsulationBoundary(String type) throws IOException {
+            this.write("-----END " + type + "-----");
+            this.newLine();
+        }
     }
 }
