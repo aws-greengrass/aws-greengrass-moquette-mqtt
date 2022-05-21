@@ -92,10 +92,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_duplicateClientIds_WHEN_checkValid_THEN_bothSessionsClosed() throws AuthorizationException {
-        // This test can be removed once we identify a better way to map
-        // client connections to auth sessions. See comments in the checkValid
-        // method surrounding duplicate client IDs for more details
+    void GIVEN_duplicateClientIds_WHEN_checkValid_THEN_firstSessionClosed() throws AuthorizationException {
         final String USERNAME1 = "PeerCert1";
         final String USERNAME2 = "PeerCert2";
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockTrustManager, mockDeviceAuthClient);
@@ -103,16 +100,17 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         when(mockTrustManager.getSessionForCertificate(USERNAME1)).thenReturn("SESSION1");
         configureConnectResponse("SESSION1", DEFAULT_CLIENT, true);
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, USERNAME1, DEFAULT_PASSWORD), is(true));
-        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), is("SESSION1"));
+        ClientDeviceAuthorizer.UserSessionPair pair = authorizer.getSessionForClient(DEFAULT_CLIENT, USERNAME1);
+        assertThat(pair.getSession(), is("SESSION1"));
 
-        // Second client should return true, but both sessions should be closed
         when(mockTrustManager.getSessionForCertificate(USERNAME2)).thenReturn("SESSION2");
         configureConnectResponse("SESSION2", DEFAULT_CLIENT, true);
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, USERNAME2, DEFAULT_PASSWORD), is(true));
-        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), is(nullValue()));
+        assertThat(authorizer.getSessionForClient(DEFAULT_CLIENT, USERNAME1), is(nullValue()));
+        ClientDeviceAuthorizer.UserSessionPair pair2 = authorizer.getSessionForClient(DEFAULT_CLIENT, USERNAME2);
+        assertThat(pair2.getSession(), is("SESSION2"));
 
-        verify(mockDeviceAuthClient).closeSession("SESSION1");
-        verify(mockDeviceAuthClient).closeSession("SESSION2");
+        verify(mockDeviceAuthClient, atMostOnce()).closeSession("SESSION1");
     }
 
     @Test
@@ -155,8 +153,8 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configurePublishResponse(false);
 
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
-        assertThat(authorizer.canRead(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(false));
-        assertThat(authorizer.canWrite(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(false));
+        assertThat(authorizer.canRead(Topic.asTopic(DEFAULT_TOPIC), DEFAULT_PEER_CERT, DEFAULT_CLIENT), is(false));
+        assertThat(authorizer.canWrite(Topic.asTopic(DEFAULT_TOPIC), DEFAULT_PEER_CERT, DEFAULT_CLIENT), is(false));
     }
 
     @Test
@@ -169,8 +167,8 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configurePublishResponse(true);
 
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
-        assertThat(authorizer.canRead(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(true));
-        assertThat(authorizer.canWrite(Topic.asTopic(DEFAULT_TOPIC), "user", DEFAULT_CLIENT), is(true));
+        assertThat(authorizer.canRead(Topic.asTopic(DEFAULT_TOPIC), DEFAULT_PEER_CERT, DEFAULT_CLIENT), is(true));
+        assertThat(authorizer.canWrite(Topic.asTopic(DEFAULT_TOPIC), DEFAULT_PEER_CERT, DEFAULT_CLIENT), is(true));
     }
 
     @Test
@@ -204,14 +202,14 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
 
         assertThat(authorizer.checkValid(client1, cert1, DEFAULT_PASSWORD), is(true));
         assertThat(authorizer.checkValid(client2, cert2, DEFAULT_PASSWORD), is(true));
-        assertThat(authorizer.canRead(Topic.asTopic(topic1), "", client1), is(true));
-        assertThat(authorizer.canWrite(Topic.asTopic(topic1), "", client1), is(true));
-        assertThat(authorizer.canRead(Topic.asTopic(topic2), "", client1), is(false));
-        assertThat(authorizer.canWrite(Topic.asTopic(topic2), "", client1), is(false));
-        assertThat(authorizer.canRead(Topic.asTopic(topic1), "", client2), is(false));
-        assertThat(authorizer.canWrite(Topic.asTopic(topic1), "", client2), is(false));
-        assertThat(authorizer.canRead(Topic.asTopic(topic2), "", client2), is(true));
-        assertThat(authorizer.canWrite(Topic.asTopic(topic2), "", client2), is(true));
+        assertThat(authorizer.canRead(Topic.asTopic(topic1), cert1, client1), is(true));
+        assertThat(authorizer.canWrite(Topic.asTopic(topic1), cert1, client1), is(true));
+        assertThat(authorizer.canRead(Topic.asTopic(topic2), cert1, client1), is(false));
+        assertThat(authorizer.canWrite(Topic.asTopic(topic2), cert1, client1), is(false));
+        assertThat(authorizer.canRead(Topic.asTopic(topic1), cert2, client2), is(false));
+        assertThat(authorizer.canWrite(Topic.asTopic(topic1), cert2, client2), is(false));
+        assertThat(authorizer.canRead(Topic.asTopic(topic2), cert2, client2), is(true));
+        assertThat(authorizer.canWrite(Topic.asTopic(topic2), cert2, client2), is(true));
     }
 
     @Test
@@ -224,9 +222,9 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
 
         authorizer.new ConnectionTerminationListener()
-            .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, null));
+            .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, DEFAULT_PEER_CERT));
         verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
-        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), nullValue());
+        assertThat(authorizer.getSessionForClient(DEFAULT_CLIENT, DEFAULT_PEER_CERT), nullValue());
     }
 
     @Test
@@ -241,8 +239,8 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
 
         authorizer.new ConnectionTerminationListener()
-            .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, null));
+            .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, DEFAULT_PEER_CERT));
         verify(mockDeviceAuthClient).closeSession(DEFAULT_SESSION);
-        assertThat(authorizer.getSessionForClientId(DEFAULT_CLIENT), nullValue());
+        assertThat(authorizer.getSessionForClient(DEFAULT_CLIENT, DEFAULT_PEER_CERT), nullValue());
     }
 }
