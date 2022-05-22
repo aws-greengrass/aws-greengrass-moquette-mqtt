@@ -78,7 +78,7 @@ public class GreengrassMoquetteSslContextCreator implements ISslContextCreator {
                     return null;
             }
             // if client authentication is enabled a trustmanager needs to be added to the ServerContext
-            String needsClientAuth = props.getProperty(BrokerConstants.NEED_CLIENT_AUTH, "false");
+            String needsClientAuth = props.getProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
             if (Boolean.parseBoolean(needsClientAuth)) {
                 addClientAuthentication(ks, contextBuilder);
             }

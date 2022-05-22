@@ -167,6 +167,7 @@ public class MQTTService extends PluginService {
         p.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
         p.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
         p.setProperty(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, "false");
+        p.setProperty(BrokerConstants.PEER_CERTIFICATE_AS_USERNAME, "true");
         p.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
         p.setProperty(BrokerConstants.IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME, "true");
         p.setProperty(BrokerConstants.NETTY_MAX_BYTES_PROPERTY_NAME, String.valueOf(Coerce
