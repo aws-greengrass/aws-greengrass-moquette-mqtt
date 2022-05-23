@@ -59,7 +59,7 @@ public class Server {
         } catch (RuntimeException e) {
             System.exit(1);
         }
-        System.out.println("Server started, version 0.16-SNAPSHOT");
+        System.out.println("Server started, version 0.16-gg");
         //Bind a shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(server::stopServer));
     }
@@ -330,7 +330,7 @@ public class Server {
         scheduler.shutdownNow();
 
         if (h2Builder != null) {
-            LOG.trace("Shutting down H2 persistence {}");
+            LOG.trace("Shutting down H2 persistence");
             h2Builder.closeStore();
         }
 
