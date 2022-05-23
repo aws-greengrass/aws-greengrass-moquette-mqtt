@@ -1,1 +1,3 @@
+greengrass-build/
 integration/target/**
+*.iml
