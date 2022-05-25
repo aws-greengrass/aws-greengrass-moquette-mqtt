@@ -29,7 +29,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
     private final ClientDeviceTrustManager trustManager;
     private final DeviceAuthClient deviceAuthClient;
-    private final Map<String, String> clientToSessionMap;
+    private final Map<String, UserSessionPair> clientToSessionMap;
 
     /**
      * Constructor.
@@ -62,32 +62,20 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                     + "client ID.");
         }
 
-        boolean canConnect = canDevicePerform(sessionId, clientId, "mqtt:connect", "mqtt:clientId:" + clientId);
+        boolean canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
 
         // Add mapping from client id to session id for future canRead/canWrite calls
         if (canConnect) {
             LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
                 .log("Successfully authenticated client device");
 
-            // Logic for handling duplicate client IDs is unintuitive. Here, we will return true
-            // so Moquette will disconnect the old connection and allow the new connection. However,
-            // after returning, there is a short period of time where authZ or disconnect callbacks
-            // for a given client ID could map to one of two sessions and we have no way of knowing
-            // which to use.
-            // In order to avoid subtle races and potential privilege escalation, we close both auth
-            // sessions. Unfortunately, this means that the next authZ call for the newly connecting
-            // client will fail and the client will be disconnected. This is non-ideal, but safe.
-            // The client can simply reconnect and everything will work.
             clientToSessionMap.compute(clientId, (k, v) -> {
-                if (v == null) {
-                    return sessionId;
-                } else {
-                    LOG.atWarn().kv(CLIENT_ID, clientId).kv("Session 1", v).kv("Session 2", sessionId)
-                        .log("Duplicate client ID detected. Closing both auth sessions.");
-                    closeSession(v);
-                    closeSession(sessionId);
-                    return null;
+                if (v != null) {
+                    LOG.atWarn().kv(CLIENT_ID, clientId).kv("Previous auth session", v.getSession())
+                        .log("Duplicate client ID detected. Closing old auth session.");
+                    closeSession(v.getSession());
                 }
+                return new UserSessionPair(username, sessionId);
             });
         } else {
             LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device isn't authorized to connect");
@@ -100,13 +88,13 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     @Override
     public boolean canWrite(Topic topic, String user, String client) {
         LOG.atDebug().kv("topic", topic).kv("user", user).kv(CLIENT_ID, client).log("MQTT publish request");
-        return canDevicePerform(client, "mqtt:publish", "mqtt:topic:" + topic);
+        return canDevicePerform(getSessionForClient(client, user), "mqtt:publish", "mqtt:topic:" + topic);
     }
 
     @Override
     public boolean canRead(Topic topic, String user, String client) {
         LOG.atDebug().kv("topic", topic).kv("user", user).kv(CLIENT_ID, client).log("MQTT subscribe request");
-        return canDevicePerform(client, "mqtt:subscribe", "mqtt:topicfilter:" + topic);
+        return canDevicePerform(getSessionForClient(client, user), "mqtt:subscribe", "mqtt:topicfilter:" + topic);
     }
 
     private void closeSession(String sessionId) {
@@ -117,29 +105,33 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         }
     }
 
-    private boolean canDevicePerform(String client, String operation, String resource) {
-        return canDevicePerform(getSessionForClientId(client), client, operation, resource);
-    }
-
-    private boolean canDevicePerform(String session, String client, String operation, String resource) {
-        if (session == null) {
-            LOG.atError().kv(CLIENT_ID, client).kv("operation", operation).kv("resource", resource)
-                .log("Unknown client request, denying request");
-            return false;
-        }
-
+    private boolean canDevicePerform(String sessionId, String operation, String resource) {
         try {
             AuthorizationRequest authorizationRequest =
-                AuthorizationRequest.builder().sessionId(session).operation(operation).resource(resource).build();
+                AuthorizationRequest.builder().sessionId(sessionId).operation(operation).resource(resource).build();
             return deviceAuthClient.canDevicePerform(authorizationRequest);
         } catch (AuthorizationException e) {
-            LOG.atError().kv(SESSION_ID, session).cause(e).log("Session ID is invalid");
+            LOG.atError().kv(SESSION_ID, sessionId).cause(e).log("Session ID is invalid");
         }
         return false;
     }
 
-    String getSessionForClientId(String clientId) {
-        return clientToSessionMap.getOrDefault(clientId, null);
+    private boolean canDevicePerform(UserSessionPair sessionPair, String operation, String resource) {
+        if (sessionPair == null) {
+            LOG.atError().kv("operation", operation).kv("resource", resource)
+                .log("Unknown client request, denying request");
+            return false;
+        }
+
+        return canDevicePerform(sessionPair.getSession(), operation, resource);
+    }
+
+    UserSessionPair getSessionForClient(String clientId, String username) {
+        UserSessionPair pair = clientToSessionMap.getOrDefault(clientId, null);
+        if (pair != null && pair.getUsername().equals(username)) {
+            return pair;
+        }
+        return null;
     }
 
     public class ConnectionTerminationListener extends AbstractInterceptHandler implements InterceptHandler {
@@ -152,27 +144,45 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         @Override
         public void onDisconnect(InterceptDisconnectMessage msg) {
             LOG.atDebug().kv(CLIENT_ID, msg.getClientID()).log("On disconnect auth session handling");
-            closeAuthSession(msg.getClientID());
+            closeAuthSession(msg.getClientID(), msg.getUsername());
         }
 
         @Override
         public void onConnectionLost(InterceptConnectionLostMessage msg) {
             LOG.atDebug().kv(CLIENT_ID, msg.getClientID()).log("On connection lost auth session handling");
-            closeAuthSession(msg.getClientID());
+            closeAuthSession(msg.getClientID(), msg.getUsername());
         }
 
-        private void closeAuthSession(String clientId) {
-            String sessionId = getSessionForClientId(clientId);
-            if (sessionId != null) {
+        private void closeAuthSession(String clientId, String username) {
+            UserSessionPair sessionPair = getSessionForClient(clientId, username);
+            if (sessionPair != null) {
+                String sessionId = sessionPair.getSession();
                 LOG.atDebug().kv(SESSION_ID, sessionId).log("Closing auth session");
                 try {
                     deviceAuthClient.closeSession(sessionId);
                 } catch (AuthorizationException e) {
                     LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Session is already closed");
                 }
-                clientToSessionMap.remove(clientId, sessionId);
+                clientToSessionMap.remove(clientId, sessionPair);
             }
         }
     }
 
+    class UserSessionPair {
+        String username;
+        String sessionId;
+
+        public UserSessionPair(String username, String sessionId) {
+            this.username = username;
+            this.sessionId = sessionId;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public String getSession() {
+            return sessionId;
+        }
+    }
 }
