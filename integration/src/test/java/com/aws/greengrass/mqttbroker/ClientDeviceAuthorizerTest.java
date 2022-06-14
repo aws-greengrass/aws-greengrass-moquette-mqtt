@@ -14,11 +14,13 @@ import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import io.moquette.broker.subscriptions.Topic;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
 
+import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.*;
@@ -73,7 +75,10 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalse() throws Exception {
+    void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalse(ExtensionContext context)
+        throws AuthenticationException {
+        ignoreExceptionOfType(context, AuthenticationException.class);
+
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenThrow(
@@ -93,7 +98,10 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_unknownClient_WHEN_canReadCanWrite_THEN_returnsFalse() throws AuthenticationException {
+    void GIVEN_unknownClient_WHEN_canReadCanWrite_THEN_returnsFalse(ExtensionContext context)
+        throws AuthenticationException {
+        ignoreExceptionOfType(context, AuthenticationException.class);
+
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenThrow(

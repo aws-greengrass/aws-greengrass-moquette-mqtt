@@ -54,7 +54,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             sessionPair = getSessionForClient(clientId, username);
             sessionId = sessionPair.getSession();
         } catch (AuthenticationException e) {
-            LOG.atWarn().kv(CLIENT_ID, clientId)
+            LOG.atWarn().cause(e).kv(CLIENT_ID, clientId)
                 .log("Can't create auth session. Check that the thing connects using its thing name as the "
                     + "client ID and has a valid AWS IoT client certificate.");
             return false;
@@ -81,7 +81,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         try {
             canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:publish", resource);
         } catch (AuthenticationException e) {
-            LOG.atWarn().kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
+            LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
         }
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT publish request");
@@ -95,7 +95,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         try {
             canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:subscribe", resource);
         } catch (AuthenticationException e) {
-            LOG.atWarn().kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
+            LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
         }
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT subscribe request");
