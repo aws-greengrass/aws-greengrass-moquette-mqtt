@@ -6,40 +6,37 @@
 package com.aws.greengrass.mqttbroker;
 
 import com.aws.greengrass.device.AuthorizationRequest;
-import com.aws.greengrass.device.DeviceAuthClient;
+import com.aws.greengrass.device.ClientDevicesAuthServiceApi;
 import com.aws.greengrass.device.exception.AuthenticationException;
 import com.aws.greengrass.device.exception.AuthorizationException;
+import com.aws.greengrass.device.exception.InvalidSessionException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.Topic;
-import io.moquette.interception.AbstractInterceptHandler;
-import io.moquette.interception.InterceptHandler;
-import io.moquette.interception.messages.InterceptConnectionLostMessage;
-import io.moquette.interception.messages.InterceptDisconnectMessage;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPolicy {
     private static final Logger LOG = LogManager.getLogger(ClientDeviceAuthorizer.class);
     private static final String CLIENT_ID = "clientId";
+    private static final String CERTIFICATE_PEM = "certificatePem";
     private static final String SESSION_ID = "sessionId";
+    private static final String MQTT_CREDENTIAL = "mqtt";
 
-    private final ClientDeviceTrustManager trustManager;
-    private final DeviceAuthClient deviceAuthClient;
+    private final ClientDevicesAuthServiceApi clientDevicesAuthService;
     private final Map<String, UserSessionPair> clientToSessionMap;
 
     /**
      * Constructor.
      *
-     * @param trustManager     Trust manager
-     * @param deviceAuthClient Device auth client
+     * @param clientDevicesAuthService Client devices auth service handle
      */
-    public ClientDeviceAuthorizer(ClientDeviceTrustManager trustManager, DeviceAuthClient deviceAuthClient) {
-        this.trustManager = trustManager;
-        this.deviceAuthClient = deviceAuthClient;
+    public ClientDeviceAuthorizer(ClientDevicesAuthServiceApi clientDevicesAuthService) {
+        this.clientDevicesAuthService = clientDevicesAuthService;
         this.clientToSessionMap = new ConcurrentHashMap<>();
     }
 
@@ -51,13 +48,16 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         }
 
         // Retrieve session ID and construct authorization request for MQTT CONNECT
-        String sessionId = trustManager.getSessionForCertificate(username);
+        UserSessionPair sessionPair;
+        String sessionId;
         try {
-            deviceAuthClient.attachThing(sessionId, clientId);
+            sessionPair = getSessionForClient(clientId, username);
+            sessionId = sessionPair.getSession();
         } catch (AuthenticationException e) {
-            LOG.atWarn().cause(e).kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
-                .log("Can't attach thing to auth session. Check that the thing connects using its thing name as the "
-                    + "client ID.");
+            LOG.atWarn().kv(CLIENT_ID, clientId)
+                .log("Can't create auth session. Check that the thing connects using its thing name as the "
+                    + "client ID and has a valid AWS IoT client certificate.");
+            return false;
         }
 
         boolean canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
@@ -66,18 +66,9 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         if (canConnect) {
             LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
                 .log("Successfully authenticated client device");
-
-            clientToSessionMap.compute(clientId, (k, v) -> {
-                if (v != null) {
-                    LOG.atWarn().kv(CLIENT_ID, clientId).kv("Previous auth session", v.getSession())
-                        .log("Duplicate client ID detected. Closing old auth session.");
-                    closeSession(v.getSession());
-                }
-                return new UserSessionPair(username, sessionId);
-            });
+            clientToSessionMap.put(clientId, sessionPair);
         } else {
             LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device isn't authorized to connect");
-            closeSession(sessionId);
         }
 
         return canConnect;
@@ -86,7 +77,12 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     @Override
     public boolean canWrite(Topic topic, String user, String client) {
         String resource = "mqtt:topic:" + topic;
-        boolean canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:publish", resource);
+        boolean canPerform = false;
+        try {
+            canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:publish", resource);
+        } catch (AuthenticationException e) {
+            LOG.atWarn().kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
+        }
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT publish request");
         return canPerform;
@@ -95,29 +91,15 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     @Override
     public boolean canRead(Topic topic, String user, String client) {
         String resource = "mqtt:topicfilter:" + topic;
-        boolean canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:subscribe", resource);
+        boolean canPerform = false;
+        try {
+            canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:subscribe", resource);
+        } catch (AuthenticationException e) {
+            LOG.atWarn().kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
+        }
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT subscribe request");
         return canPerform;
-    }
-
-    private void closeSession(String sessionId) {
-        try {
-            deviceAuthClient.closeSession(sessionId);
-        } catch (AuthorizationException e) {
-            LOG.atWarn().cause(e).kv(SESSION_ID, sessionId).log("Failed to close session");
-        }
-    }
-
-    private boolean canDevicePerform(String sessionId, String operation, String resource) {
-        try {
-            AuthorizationRequest authorizationRequest =
-                AuthorizationRequest.builder().sessionId(sessionId).operation(operation).resource(resource).build();
-            return deviceAuthClient.canDevicePerform(authorizationRequest);
-        } catch (AuthorizationException e) {
-            LOG.atError().kv(SESSION_ID, sessionId).cause(e).log("Session ID is invalid");
-        }
-        return false;
     }
 
     private boolean canDevicePerform(UserSessionPair sessionPair, String operation, String resource) {
@@ -128,46 +110,32 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         return canDevicePerform(sessionPair.getSession(), operation, resource);
     }
 
-    UserSessionPair getSessionForClient(String clientId, String username) {
+    private boolean canDevicePerform(String sessionId, String operation, String resource) {
+        try {
+            AuthorizationRequest authorizationRequest =
+                AuthorizationRequest.builder().sessionId(sessionId).operation(operation).resource(resource).build();
+            return clientDevicesAuthService.authorizeClientDeviceAction(authorizationRequest);
+        } catch (AuthorizationException e) {
+            LOG.atError().kv(SESSION_ID, sessionId).cause(e).log("Session ID is invalid");
+        }
+        return false;
+    }
+
+    UserSessionPair getSessionForClient(String clientId, String username) throws AuthenticationException {
         UserSessionPair pair = clientToSessionMap.getOrDefault(clientId, null);
         if (pair != null && pair.getUsername().equals(username)) {
             return pair;
         }
-        LOG.atDebug().kv(CLIENT_ID, clientId).log("Unable to retrieve authorization session");
-        return null;
+        return createSessionForClient(clientId, username);
     }
 
-    public class ConnectionTerminationListener extends AbstractInterceptHandler implements InterceptHandler {
+    UserSessionPair createSessionForClient(String clientId, String username) throws AuthenticationException {
+        Map<String, String> mqttCredentials = new HashMap<>();
+        mqttCredentials.put(CERTIFICATE_PEM, username); // Client certificate is passed as username
+        mqttCredentials.put(CLIENT_ID, clientId);
 
-        @Override
-        public String getID() {
-            return "ClientDeviceConnectionTerminationListener";
-        }
-
-        @Override
-        public void onDisconnect(InterceptDisconnectMessage msg) {
-            closeAuthSession(msg.getClientID(), msg.getUsername());
-        }
-
-        @Override
-        public void onConnectionLost(InterceptConnectionLostMessage msg) {
-            closeAuthSession(msg.getClientID(), msg.getUsername());
-        }
-
-        private void closeAuthSession(String clientId, String username) {
-            UserSessionPair sessionPair = getSessionForClient(clientId, username);
-            if (sessionPair != null) {
-                String sessionId = sessionPair.getSession();
-                LOG.atDebug().kv(SESSION_ID, sessionId).log("Closing auth session");
-                try {
-                    deviceAuthClient.closeSession(sessionId);
-                } catch (AuthorizationException e) {
-                    // This will happen under normal operating circumstances
-                    LOG.atDebug().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Session is already closed");
-                }
-                clientToSessionMap.remove(clientId, sessionPair);
-            }
-        }
+        String sessionId = clientDevicesAuthService.getClientDeviceAuthToken(MQTT_CREDENTIAL, mqttCredentials);
+        return new UserSessionPair(username, sessionId);
     }
 
     class UserSessionPair {
