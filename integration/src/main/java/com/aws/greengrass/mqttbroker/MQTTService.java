@@ -12,7 +12,7 @@ import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
-import com.aws.greengrass.device.DeviceAuthClient;
+import com.aws.greengrass.device.ClientDevicesAuthServiceApi;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.util.Coerce;
@@ -56,19 +56,19 @@ public class MQTTService extends PluginService {
     /**
      * Constructor for GreengrassService.
      *
-     * @param topics             Root Configuration topic for this service
-     * @param kernel             Greengrass Nucleus
-     * @param certificateManager Client devices auth's certificate manager
-     * @param deviceAuthClient   Client device auth client
+     * @param topics                   Root Configuration topic for this service
+     * @param kernel                   Greengrass Nucleus
+     * @param certificateManager       Client devices auth's certificate manager
+     * @param clientDevicesAuthService Client devices auth service handle
      */
     @Inject
     public MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager,
-                       DeviceAuthClient deviceAuthClient) {
+                       ClientDevicesAuthServiceApi clientDevicesAuthService) {
         super(topics);
         this.kernel = kernel;
         this.certificateManager = certificateManager;
-        this.clientDeviceTrustManager = new ClientDeviceTrustManager(deviceAuthClient);
-        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDeviceTrustManager, deviceAuthClient);
+        this.clientDeviceTrustManager = new ClientDeviceTrustManager(clientDevicesAuthService);
+        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService);
         this.interceptHandlers = Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener());
     }
 

@@ -5,8 +5,7 @@
 
 package com.aws.greengrass.mqttbroker;
 
-import com.aws.greengrass.device.DeviceAuthClient;
-import com.aws.greengrass.device.exception.AuthenticationException;
+import com.aws.greengrass.device.ClientDevicesAuthServiceApi;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 
@@ -15,30 +14,25 @@ import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.X509TrustManager;
 
 public class ClientDeviceTrustManager implements X509TrustManager {
     private static final Logger LOG = LogManager.getLogger(ClientDeviceTrustManager.class);
     private static final String BEGIN_CERT = "-----BEGIN CERTIFICATE-----";
     private static final String END_CERT = "-----END CERTIFICATE-----";
-    private static final String CERTIFICATE_PEM = "certificatePem";
     private static final String LINE_SEPARATOR = System.getProperty("line.separator");
 
-    private final DeviceAuthClient deviceAuthClient;
-    private final Map<String, String> sessionMap;
+    private final ClientDevicesAuthServiceApi clientDevicesAuthService;
 
-    public ClientDeviceTrustManager(DeviceAuthClient deviceAuthClient) {
-        this.deviceAuthClient = deviceAuthClient;
-        this.sessionMap = new ConcurrentHashMap<>();
+    public ClientDeviceTrustManager(ClientDevicesAuthServiceApi clientDevicesAuthService) {
+        this.clientDevicesAuthService = clientDevicesAuthService;
     }
 
     @Override
     public void checkClientTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException {
         String certPem = x509CertificatesToPem(x509Certificates);
-        String sessionId = sessionMap.computeIfAbsent(certPem, k -> createSession(certPem));
-        if (sessionId == null) {
+        boolean isAuthenticated = clientDevicesAuthService.verifyClientDeviceIdentity(certPem);
+        if (!isAuthenticated) {
             LOG.atError("Unable to authenticate client device");
             throw new CertificateException("Unable to authenticate client device");
         }
@@ -52,48 +46,6 @@ public class ClientDeviceTrustManager implements X509TrustManager {
     @Override
     public X509Certificate[] getAcceptedIssuers() {
         return new X509Certificate[0];
-    }
-
-    /**
-     * Returns a valid session ID for the given certificate chain, if it exists.
-     *
-     * @param x509Certificates certificate chain
-     * @return a session id
-     */
-    public String getSessionForCertificate(X509Certificate... x509Certificates) {
-        String certPem = null;
-
-        try {
-            certPem = x509CertificatesToPem(x509Certificates);
-        } catch (CertificateEncodingException e) {
-            LOG.atError().cause(e).log("Unable to PEM encode X.509 certificate");
-            return null;
-        }
-
-        return getSessionForCertificate(certPem);
-    }
-
-    /**
-     * Returns a valid session ID for the given certificate chain, if it exists.
-     *
-     * @param certificatePem peer certificate PEM
-     * @return a session id
-     */
-    public String getSessionForCertificate(String certificatePem) {
-        String sessionId = sessionMap.remove(certificatePem);
-        if (sessionId == null) {
-            sessionId = createSession(certificatePem);
-        }
-        return sessionId;
-    }
-
-    private String createSession(String certPem) {
-        try {
-            return deviceAuthClient.createSession(certPem);
-        } catch (AuthenticationException e) {
-            LOG.atError().cause(e).kv(CERTIFICATE_PEM, certPem).log("Can't authenticate certificate");
-            return null;
-        }
     }
 
     private static String x509CertificatesToPem(X509Certificate... x509Certificates)
