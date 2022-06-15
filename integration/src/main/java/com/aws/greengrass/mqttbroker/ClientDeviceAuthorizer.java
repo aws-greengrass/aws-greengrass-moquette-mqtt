@@ -14,6 +14,10 @@ import com.aws.greengrass.logging.impl.LogManager;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.Topic;
+import io.moquette.interception.AbstractInterceptHandler;
+import io.moquette.interception.InterceptHandler;
+import io.moquette.interception.messages.InterceptConnectionLostMessage;
+import io.moquette.interception.messages.InterceptDisconnectMessage;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -50,7 +54,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         UserSessionPair sessionPair;
         String sessionId;
         try {
-            sessionPair = getSessionForClient(clientId, username);
+            sessionPair = getOrCreateSessionForClient(clientId, username);
             sessionId = sessionPair.getSession();
         } catch (AuthenticationException e) {
             LOG.atWarn().cause(e).kv(CLIENT_ID, clientId)
@@ -65,9 +69,17 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         if (canConnect) {
             LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
                 .log("Successfully authenticated client device");
-            clientToSessionMap.put(clientId, sessionPair);
+            clientToSessionMap.compute(clientId, (k, v) -> {
+                if (v != null) {
+                    LOG.atWarn().kv(CLIENT_ID, clientId).kv("Previous auth session", v.getSession())
+                        .log("Duplicate client ID detected. Closing old auth session.");
+                    clientDevicesAuthService.closeClientDeviceAuthSession(v.getSession());
+                }
+                return new UserSessionPair(username, sessionId);
+            });
         } else {
             LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device isn't authorized to connect");
+            clientDevicesAuthService.closeClientDeviceAuthSession(sessionId);
         }
 
         return canConnect;
@@ -78,7 +90,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         String resource = "mqtt:topic:" + topic;
         boolean canPerform = false;
         try {
-            canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:publish", resource);
+            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), "mqtt:publish", resource);
         } catch (AuthenticationException e) {
             LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
         }
@@ -92,7 +104,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         String resource = "mqtt:topicfilter:" + topic;
         boolean canPerform = false;
         try {
-            canPerform = canDevicePerform(getSessionForClient(client, user), "mqtt:subscribe", resource);
+            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), "mqtt:subscribe", resource);
         } catch (AuthenticationException e) {
             LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
         }
@@ -120,9 +132,17 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         return false;
     }
 
-    UserSessionPair getSessionForClient(String clientId, String username) throws AuthenticationException {
+    UserSessionPair getSessionForClient(String clientId, String username) {
         UserSessionPair pair = clientToSessionMap.getOrDefault(clientId, null);
         if (pair != null && pair.getUsername().equals(username)) {
+            return pair;
+        }
+        return null;
+    }
+
+    UserSessionPair getOrCreateSessionForClient(String clientId, String username) throws AuthenticationException {
+        UserSessionPair pair = getSessionForClient(clientId, username);
+        if (pair != null) {
             return pair;
         }
         return createSessionForClient(clientId, username);
@@ -152,6 +172,33 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
 
         public String getSession() {
             return sessionId;
+        }
+    }
+
+    public class ConnectionTerminationListener extends AbstractInterceptHandler implements InterceptHandler {
+        @Override
+        public String getID() {
+            return "ClientDeviceConnectionTerminationListener";
+        }
+
+        @Override
+        public void onDisconnect(InterceptDisconnectMessage msg) {
+            closeAuthSession(msg.getClientID(), msg.getUsername());
+        }
+
+        @Override
+        public void onConnectionLost(InterceptConnectionLostMessage msg) {
+            closeAuthSession(msg.getClientID(), msg.getUsername());
+        }
+
+        private void closeAuthSession(String clientId, String username) {
+            UserSessionPair sessionPair = getSessionForClient(clientId, username);
+            if (sessionPair != null) {
+                String sessionId = sessionPair.getSession();
+                LOG.atDebug().kv(SESSION_ID, sessionId).log("Closing auth session");
+                clientDevicesAuthService.closeClientDeviceAuthSession(sessionId);
+                clientToSessionMap.remove(clientId, sessionPair);
+            }
         }
     }
 }
