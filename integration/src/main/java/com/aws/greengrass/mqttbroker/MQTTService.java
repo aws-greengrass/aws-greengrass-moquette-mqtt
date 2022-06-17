@@ -5,14 +5,16 @@
 
 package com.aws.greengrass.mqttbroker;
 
-import com.aws.greengrass.certificatemanager.CertificateManager;
-import com.aws.greengrass.certificatemanager.certificate.CsrProcessingException;
 import com.aws.greengrass.config.Node;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.device.ClientDevicesAuthServiceApi;
+import com.aws.greengrass.device.api.CertificateUpdateEvent;
+import com.aws.greengrass.device.api.GetCertificateRequest;
+import com.aws.greengrass.device.api.GetCertificateRequestOptions;
+import com.aws.greengrass.device.exception.CertificateGenerationException;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.util.Coerce;
@@ -22,11 +24,9 @@ import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
 import io.moquette.interception.InterceptHandler;
-import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
 import java.security.KeyStoreException;
-import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -42,13 +42,13 @@ public class MQTTService extends PluginService {
     private static BrokerKeyStore brokerKeyStore;
     private final Server mqttBroker = new Server();
     private final Kernel kernel;
-    private final CertificateManager certificateManager;
     private final ClientDeviceTrustManager clientDeviceTrustManager;
     private final ClientDeviceAuthorizer clientDeviceAuthorizer;
     private final List<InterceptHandler> interceptHandlers;
+    private final ClientDevicesAuthServiceApi clientDevicesAuthServiceApi;
     // Store a single, unchanging reference to the method so that it can be deduplicated in CDA so that
     // it isn't called multiple times if Moquette is restarted by GG or a user.
-    private final Consumer<X509Certificate> updateServerCertificateCb = this::updateServerCertificate;
+    private final Consumer<CertificateUpdateEvent> updateServerCertificateCb = this::updateServerCertificate;
 
     private boolean serverRunning = false;
     private Properties runningProperties = null;
@@ -58,18 +58,16 @@ public class MQTTService extends PluginService {
      *
      * @param topics                   Root Configuration topic for this service
      * @param kernel                   Greengrass Nucleus
-     * @param certificateManager       Client devices auth's certificate manager
      * @param clientDevicesAuthService Client devices auth service handle
      */
     @Inject
-    public MQTTService(Topics topics, Kernel kernel, CertificateManager certificateManager,
-                       ClientDevicesAuthServiceApi clientDevicesAuthService) {
+    public MQTTService(Topics topics, Kernel kernel, ClientDevicesAuthServiceApi clientDevicesAuthService) {
         super(topics);
         this.kernel = kernel;
-        this.certificateManager = certificateManager;
         this.clientDeviceTrustManager = new ClientDeviceTrustManager(clientDevicesAuthService);
         this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService);
         this.interceptHandlers = Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener());
+        this.clientDevicesAuthServiceApi = clientDevicesAuthService;
     }
 
     @Override
@@ -91,9 +89,9 @@ public class MQTTService extends PluginService {
         }
     }
 
-    private synchronized void updateServerCertificate(X509Certificate cert) {
+    private synchronized void updateServerCertificate(CertificateUpdateEvent certificateUpdate) {
         try {
-            brokerKeyStore.updateServerCertificate(cert);
+            brokerKeyStore.updateServerCertificate(certificateUpdate);
         } catch (KeyStoreException e) {
             logger.atError().cause(e).log("Failed to update MQTT broker certificate");
         }
@@ -104,9 +102,12 @@ public class MQTTService extends PluginService {
     public synchronized void startup() {
         // Subscribe to client devices auth certificate updates
         try {
-            String brokerCsr = brokerKeyStore.getCsr();
-            certificateManager.subscribeToServerCertificateUpdates(brokerCsr, updateServerCertificateCb);
-        } catch (KeyStoreException | CsrProcessingException | OperatorCreationException | IOException e) {
+            GetCertificateRequestOptions options = new GetCertificateRequestOptions();
+            options.setCertificateType(GetCertificateRequestOptions.CertificateType.SERVER);
+            GetCertificateRequest certificateRequest =
+                new GetCertificateRequest(SERVICE_NAME, options, updateServerCertificateCb);
+            clientDevicesAuthServiceApi.subscribeToCertificateUpdates(certificateRequest);
+        } catch (CertificateGenerationException e) {
             logger.atError().log("Unable to generate MQTT broker certificate");
             serviceErrored(e);
             return;
