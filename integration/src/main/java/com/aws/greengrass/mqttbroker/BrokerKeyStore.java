@@ -75,6 +75,7 @@ public class BrokerKeyStore {
      * @throws KeyStoreException If unable to set key entry.
      */
     public void updateServerCertificate(CertificateUpdateEvent certificateUpdate) throws KeyStoreException {
+        // TODO: Support certificate chains
         Certificate[] certChain = {certificateUpdate.getCertificate()};
         jks.setKeyEntry(BROKER_KEY_ALIAS, certificateUpdate.getKeyPair().getPrivate(), jksPassword.toCharArray(),
             certChain);

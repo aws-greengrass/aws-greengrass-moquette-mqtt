@@ -30,7 +30,6 @@ import java.security.KeyStoreException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Consumer;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -46,9 +45,7 @@ public class MQTTService extends PluginService {
     private final ClientDeviceAuthorizer clientDeviceAuthorizer;
     private final List<InterceptHandler> interceptHandlers;
     private final ClientDevicesAuthServiceApi clientDevicesAuthServiceApi;
-    // Store a single, unchanging reference to the method so that it can be deduplicated in CDA so that
-    // it isn't called multiple times if Moquette is restarted by GG or a user.
-    private final Consumer<CertificateUpdateEvent> updateServerCertificateCb = this::updateServerCertificate;
+    private final GetCertificateRequest serverCertificateRequest;
 
     private boolean serverRunning = false;
     private Properties runningProperties = null;
@@ -68,6 +65,10 @@ public class MQTTService extends PluginService {
         this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService);
         this.interceptHandlers = Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener());
         this.clientDevicesAuthServiceApi = clientDevicesAuthService;
+
+        GetCertificateRequestOptions options = new GetCertificateRequestOptions();
+        options.setCertificateType(GetCertificateRequestOptions.CertificateType.SERVER);
+        serverCertificateRequest = new GetCertificateRequest(SERVICE_NAME, options, this::updateServerCertificate);
     }
 
     @Override
@@ -102,11 +103,7 @@ public class MQTTService extends PluginService {
     public synchronized void startup() {
         // Subscribe to client devices auth certificate updates
         try {
-            GetCertificateRequestOptions options = new GetCertificateRequestOptions();
-            options.setCertificateType(GetCertificateRequestOptions.CertificateType.SERVER);
-            GetCertificateRequest certificateRequest =
-                new GetCertificateRequest(SERVICE_NAME, options, updateServerCertificateCb);
-            clientDevicesAuthServiceApi.subscribeToCertificateUpdates(certificateRequest);
+            clientDevicesAuthServiceApi.subscribeToCertificateUpdates(serverCertificateRequest);
         } catch (CertificateGenerationException e) {
             logger.atError().log("Unable to generate MQTT broker certificate");
             serviceErrored(e);
@@ -120,6 +117,7 @@ public class MQTTService extends PluginService {
 
     @Override
     public synchronized void shutdown() {
+        clientDevicesAuthServiceApi.unsubscribeFromCertificateUpdates(serverCertificateRequest);
         if (serverRunning) {
             mqttBroker.stopServer();
             serverRunning = false;
