@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.mqttbroker;
+package com.aws.greengrass.mqtt.moquette;
 
-import com.aws.greengrass.device.AuthorizationRequest;
-import com.aws.greengrass.device.ClientDevicesAuthServiceApi;
-import com.aws.greengrass.device.exception.AuthenticationException;
-import com.aws.greengrass.device.exception.AuthorizationException;
+import com.aws.greengrass.clientdevices.auth.AuthorizationRequest;
+import com.aws.greengrass.clientdevices.auth.api.ClientDevicesAuthServiceApi;
+import com.aws.greengrass.clientdevices.auth.exception.AuthenticationException;
+import com.aws.greengrass.clientdevices.auth.exception.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import io.moquette.broker.security.IAuthenticator;

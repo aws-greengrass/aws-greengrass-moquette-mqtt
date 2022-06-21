@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.mqttbroker;
+package com.aws.greengrass.mqtt.moquette;
 
 import io.moquette.BrokerConstants;
 import io.moquette.broker.ISslContextCreator;
