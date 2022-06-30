@@ -17,6 +17,7 @@ import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.mqtt.moquette.metrics.MoquetteMqttMetricsEmmitter;
 import com.aws.greengrass.util.Coerce;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.ISslContextCreator;
@@ -27,7 +28,7 @@ import io.moquette.interception.InterceptHandler;
 
 import java.io.IOException;
 import java.security.KeyStoreException;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import javax.inject.Inject;
@@ -43,6 +44,7 @@ public class MQTTService extends PluginService {
     private final Kernel kernel;
     private final ClientDeviceTrustManager clientDeviceTrustManager;
     private final ClientDeviceAuthorizer clientDeviceAuthorizer;
+    private final MoquetteMqttMetricsEmmitter mqttMetricsEmmitter;
     private final List<InterceptHandler> interceptHandlers;
     private final ClientDevicesAuthServiceApi clientDevicesAuthServiceApi;
     private final GetCertificateRequest serverCertificateRequest;
@@ -62,8 +64,10 @@ public class MQTTService extends PluginService {
         super(topics);
         this.kernel = kernel;
         this.clientDeviceTrustManager = new ClientDeviceTrustManager(clientDevicesAuthService);
-        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService);
-        this.interceptHandlers = Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener());
+        this.mqttMetricsEmmitter = new MoquetteMqttMetricsEmmitter();
+        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService, mqttMetricsEmmitter);
+        this.interceptHandlers = Arrays.asList(clientDeviceAuthorizer.new ConnectionTerminationListener(),
+            mqttMetricsEmmitter. new MqttMetricsCaptor());
         this.clientDevicesAuthServiceApi = clientDevicesAuthService;
 
         GetCertificateRequestOptions options = new GetCertificateRequestOptions();
