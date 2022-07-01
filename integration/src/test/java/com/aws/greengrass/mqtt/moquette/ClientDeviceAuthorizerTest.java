@@ -9,7 +9,6 @@ import com.aws.greengrass.clientdevices.auth.AuthorizationRequest;
 import com.aws.greengrass.clientdevices.auth.api.ClientDevicesAuthServiceApi;
 import com.aws.greengrass.clientdevices.auth.exception.AuthenticationException;
 import com.aws.greengrass.clientdevices.auth.exception.AuthorizationException;
-import com.aws.greengrass.mqtt.moquette.metrics.MoquetteMqttMetricsEmmitter;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import io.moquette.broker.subscriptions.Topic;
@@ -32,8 +31,6 @@ import static org.mockito.Mockito.*;
 public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Mock
     ClientDevicesAuthServiceApi mockClientDevicesAuthService;
-    @Mock
-    MoquetteMqttMetricsEmmitter mockMqttMetricsEmmitter;
 
     private static final String DEFAULT_SESSION = "SESSION_ID";
     private static final String DEFAULT_CLIENT = "clientId";
@@ -75,13 +72,13 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_clientDataWithoutCertificate_WHEN_checkValid_THEN_returnsFalse() {
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, EMPTY_PEER_CERT, DEFAULT_PASSWORD), is(false));
     }
 
     @Test
     void GIVEN_unauthorizedClient_WHEN_checkValid_THEN_returnsFalseAndClosesSession() throws Exception {
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(false);
@@ -95,7 +92,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         AuthorizationException {
         final String USERNAME1 = "PeerCert1";
         final String USERNAME2 = "PeerCert2";
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn("SESSION1");
         configureConnectResponse("SESSION1", DEFAULT_CLIENT, true);
@@ -118,7 +115,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         throws AuthenticationException {
         ignoreExceptionOfType(context, AuthenticationException.class);
 
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenThrow(
             new AuthenticationException("Invalid client"));
@@ -128,7 +125,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_authorizedClient_WHEN_checkValid_THEN_returnsTrue() throws Exception {
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
@@ -141,7 +138,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         throws AuthenticationException {
         ignoreExceptionOfType(context, AuthenticationException.class);
 
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenThrow(
             new AuthenticationException("Invalid client"));
@@ -152,7 +149,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_unauthorizedClient_WHEN_canReadCanWrite_THEN_returnsFalse() throws AuthenticationException, AuthorizationException {
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
@@ -166,7 +163,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_unauthorizedClient_WHEN_canReadCanWrite_THEN_returnsTrue() throws AuthenticationException, AuthorizationException {
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);
@@ -181,7 +178,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_twoClientsWithDifferingPermissions_WHEN_canReadCanWrite_THEN_correctSessionIsUsed()
         throws AuthenticationException, AuthorizationException {
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
         String session1 = "SESSION_ID1";
         String session2 = "SESSION_ID2";
         String client1 = "clientId1";
@@ -223,7 +220,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_authorizedClient_WHEN_onDisconnect_THEN_closeAuthSession() throws AuthenticationException,
         AuthorizationException {
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService, mockMqttMetricsEmmitter);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
         configureConnectResponse(true);

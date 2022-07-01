@@ -17,7 +17,8 @@ import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
-import com.aws.greengrass.mqtt.moquette.metrics.MoquetteMqttMetricsEmmitter;
+import com.aws.greengrass.mqtt.moquette.metrics.MqttMetricsCaptor;
+import com.aws.greengrass.mqtt.moquette.metrics.MqttMetricsEmitter;
 import com.aws.greengrass.util.Coerce;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.ISslContextCreator;
@@ -44,7 +45,6 @@ public class MQTTService extends PluginService {
     private final Kernel kernel;
     private final ClientDeviceTrustManager clientDeviceTrustManager;
     private final ClientDeviceAuthorizer clientDeviceAuthorizer;
-    private final MoquetteMqttMetricsEmmitter mqttMetricsEmmitter;
     private final List<InterceptHandler> interceptHandlers;
     private final ClientDevicesAuthServiceApi clientDevicesAuthServiceApi;
     private final GetCertificateRequest serverCertificateRequest;
@@ -58,21 +58,22 @@ public class MQTTService extends PluginService {
      * @param topics                   Root Configuration topic for this service
      * @param kernel                   Greengrass Nucleus
      * @param clientDevicesAuthService Client devices auth service handle
+     * @param mqttMetricsEmitter       MQTT metrics emitter
      */
     @Inject
-    public MQTTService(Topics topics, Kernel kernel, ClientDevicesAuthServiceApi clientDevicesAuthService) {
+    public MQTTService(Topics topics, Kernel kernel, ClientDevicesAuthServiceApi clientDevicesAuthService,
+                       MqttMetricsEmitter mqttMetricsEmitter) {
         super(topics);
         this.kernel = kernel;
         this.clientDeviceTrustManager = new ClientDeviceTrustManager(clientDevicesAuthService);
-        this.mqttMetricsEmmitter = new MoquetteMqttMetricsEmmitter();
-        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService, mqttMetricsEmmitter);
+        this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService);
         this.interceptHandlers = Arrays.asList(clientDeviceAuthorizer.new ConnectionTerminationListener(),
-            mqttMetricsEmmitter. new MqttMetricsCaptor());
+            new MqttMetricsCaptor());
         this.clientDevicesAuthServiceApi = clientDevicesAuthService;
-
         GetCertificateRequestOptions options = new GetCertificateRequestOptions();
         options.setCertificateType(GetCertificateRequestOptions.CertificateType.SERVER);
         serverCertificateRequest = new GetCertificateRequest(SERVICE_NAME, options, this::updateServerCertificate);
+        mqttMetricsEmitter.schedulePeriodicMetricEmit();
     }
 
     @Override

@@ -12,6 +12,7 @@ import com.aws.greengrass.clientdevices.auth.exception.CertificateGenerationExce
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.exceptions.ServiceLoadException;
+import com.aws.greengrass.mqtt.moquette.metrics.MqttMetricsEmitter;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
@@ -36,6 +37,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -50,6 +52,9 @@ public class MQTTServiceTest extends GGServiceTestUtil {
     @Mock
     ClientDevicesAuthServiceApi mockCDAServiceApi;
 
+    @Mock
+    MqttMetricsEmitter mockMqttMetricsEmitter;
+
     @BeforeEach
     void setup() {
         // Set this property for kernel to scan its own classpath to find plugins
@@ -57,6 +62,7 @@ public class MQTTServiceTest extends GGServiceTestUtil {
 
         kernel = new Kernel();
         kernel.getContext().put(ClientDevicesAuthServiceApi.class, mockCDAServiceApi);
+        kernel.getContext().put(MqttMetricsEmitter.class, mockMqttMetricsEmitter);
     }
 
     @AfterEach
@@ -112,5 +118,11 @@ public class MQTTServiceTest extends GGServiceTestUtil {
         assertThat(isListeningOnPort(9000), is(true));
         assertThat(isListeningOnPort(8883), is(false));
         assertThat(isListeningOnPort(1883), is(false));
+    }
+
+    @Test
+    void GIVEN_mqttMetricsEmitter_WHEN_startComponent_THEN_schedulesPeriodicMetricEmit() throws InterruptedException {
+        startNucleusWithConfig("config.yaml");
+        verify(mockMqttMetricsEmitter, times(1)).schedulePeriodicMetricEmit();
     }
 }
