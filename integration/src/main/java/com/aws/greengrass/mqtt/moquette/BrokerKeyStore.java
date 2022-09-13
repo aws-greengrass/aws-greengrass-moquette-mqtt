@@ -22,9 +22,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.stream.Stream;
 
 public class BrokerKeyStore {
     private static final Logger LOGGER = LogManager.getLogger(BrokerKeyStore.class);
@@ -78,17 +76,12 @@ public class BrokerKeyStore {
      * @throws KeyStoreException If unable to set key entry.
      */
     public void updateServerCertificate(CertificateUpdateEvent certificateUpdate) throws KeyStoreException {
-        List<X509Certificate> certChainList = new ArrayList<>();
-        // Add server cert as first entry to the certificate chain
-        certChainList.add(certificateUpdate.getCertificate());
-        // Add rest of the CA certificate chain
-        certChainList.addAll(Arrays.asList(certificateUpdate.getCaCertificates()));
+        X509Certificate[] fullChain = Stream.concat(Stream.of(certificateUpdate.getCertificate()),
+                Stream.of(certificateUpdate.getCaCertificates()))
+            .toArray(X509Certificate[]::new);
 
-        X509Certificate[] certChain =  new X509Certificate[certChainList.size()];
-        certChainList.toArray(certChain);
-
-        jks.setKeyEntry(BROKER_KEY_ALIAS, certificateUpdate.getKeyPair().getPrivate(), jksPassword.toCharArray(),
-            certChain);
+        jks.setKeyEntry(BROKER_KEY_ALIAS, certificateUpdate.getKeyPair().getPrivate(),
+            jksPassword.toCharArray(), fullChain);
 
         try {
             commit();
