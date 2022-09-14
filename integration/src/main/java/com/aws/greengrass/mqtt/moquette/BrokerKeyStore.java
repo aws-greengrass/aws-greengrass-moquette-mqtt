@@ -20,8 +20,9 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.stream.Stream;
 
 public class BrokerKeyStore {
     private static final Logger LOGGER = LogManager.getLogger(BrokerKeyStore.class);
@@ -75,10 +76,12 @@ public class BrokerKeyStore {
      * @throws KeyStoreException If unable to set key entry.
      */
     public void updateServerCertificate(CertificateUpdateEvent certificateUpdate) throws KeyStoreException {
-        // TODO: Support certificate chains
-        Certificate[] certChain = {certificateUpdate.getCertificate()};
-        jks.setKeyEntry(BROKER_KEY_ALIAS, certificateUpdate.getKeyPair().getPrivate(), jksPassword.toCharArray(),
-            certChain);
+        X509Certificate[] fullChain = Stream.concat(Stream.of(certificateUpdate.getCertificate()),
+                Stream.of(certificateUpdate.getCaCertificates()))
+            .toArray(X509Certificate[]::new);
+
+        jks.setKeyEntry(BROKER_KEY_ALIAS, certificateUpdate.getKeyPair().getPrivate(),
+            jksPassword.toCharArray(), fullChain);
 
         try {
             commit();
