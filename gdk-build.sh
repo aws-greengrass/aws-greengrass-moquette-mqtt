@@ -2,10 +2,11 @@
 
 set -e
 
-mkdir -p greengrass-build/artifacts/aws.greengrass.clientdevices.mqtt.Moquette/NEXT_PATCH
-mkdir -p greengrass-build/recipes
+# Extract from gdk-config.json
+VERSION=`jq -r '.component."aws.greengrass.clientdevices.mqtt.Moquette".version' gdk-config.json`
 
 mvn clean package -DskipTests
 
-cp integration/target/aws.greengrass.clientdevices.mqtt.Moquette.jar greengrass-build/artifacts/aws.greengrass.clientdevices.mqtt.Moquette/NEXT_PATCH/ \
+cp integration/target/aws.greengrass.clientdevices.mqtt.Moquette.jar \
+    greengrass-build/artifacts/aws.greengrass.clientdevices.mqtt.Moquette/${VERSION}/ \
     && cp recipe.json greengrass-build/recipes/
