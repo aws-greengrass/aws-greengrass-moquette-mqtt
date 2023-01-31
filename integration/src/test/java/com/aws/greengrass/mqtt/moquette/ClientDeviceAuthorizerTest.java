@@ -9,6 +9,7 @@ import com.aws.greengrass.clientdevices.auth.AuthorizationRequest;
 import com.aws.greengrass.clientdevices.auth.api.ClientDevicesAuthServiceApi;
 import com.aws.greengrass.clientdevices.auth.exception.AuthenticationException;
 import com.aws.greengrass.clientdevices.auth.exception.AuthorizationException;
+import com.aws.greengrass.clientdevices.auth.exception.InvalidSessionException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import io.moquette.broker.subscriptions.Topic;
@@ -46,12 +47,29 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         when(mockClientDevicesAuthService.authorizeClientDeviceAction(authorizationRequest)).thenReturn(doAllow);
     }
 
+    void configureAuthResponseCDA(String session, String operation, String resource, boolean doAllow)
+        throws AuthorizationException {
+        AuthorizationRequest authorizationRequest =
+            AuthorizationRequest.builder().sessionId(session).operation(operation).resource(resource).build();
+        when(mockClientDevicesAuthService.authorizeClientDeviceAction(authorizationRequest))
+            .thenThrow(new InvalidSessionException(String.format("Invalid session ID (%s)", session)))
+            .thenReturn(doAllow);
+    }
+
     void configureConnectResponse(String session, String clientId, boolean doAllow) throws AuthorizationException {
         configureAuthResponse(session, "mqtt:connect", "mqtt:clientId:" + clientId, doAllow);
     }
 
     void configureConnectResponse(boolean doAllow) throws AuthorizationException {
         configureConnectResponse(DEFAULT_SESSION, DEFAULT_CLIENT, doAllow);
+    }
+
+    void configureConnectResponseCDA(String session, String clientId, boolean doAllow) throws AuthorizationException {
+        configureAuthResponseCDA(session, "mqtt:connect", "mqtt:clientId:" + clientId, doAllow);
+    }
+
+    void configureConnectResponseCDA(boolean doAllow) throws AuthorizationException {
+        configureConnectResponseCDA(DEFAULT_SESSION, DEFAULT_CLIENT, doAllow);
     }
 
     void configurePublishResponse(String session, String topic, boolean doAllow) throws AuthorizationException {
@@ -231,5 +249,54 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
             .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, DEFAULT_PEER_CERT));
         verify(mockClientDevicesAuthService).closeClientDeviceAuthSession(DEFAULT_SESSION);
         assertThat(authorizer.getSessionForClient(DEFAULT_CLIENT, DEFAULT_PEER_CERT), nullValue());
+    }
+
+    @Test
+    void GIVEN_authorizedClientAndInvalidSession_WHEN_checkValid_THEN_returnsTrue(ExtensionContext context) throws
+        AuthenticationException, AuthorizationException {
+        ignoreExceptionOfType(context, InvalidSessionException.class);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
+
+        when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
+        configureConnectResponseCDA(true);
+
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
+    }
+
+    @Test
+    void GIVEN_authorizedClientAndInvalidSession_WHEN_canReadCanWrite_THEN_returnsTrue(ExtensionContext context) throws
+        AuthenticationException, AuthorizationException {
+        ignoreExceptionOfType(context, InvalidSessionException.class);
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
+
+        when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
+        configureConnectResponseCDA(true);
+        configureSubscribeResponse(true);
+        configurePublishResponse(true);
+
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
+        assertThat(authorizer.canRead(Topic.asTopic(DEFAULT_TOPIC), DEFAULT_PEER_CERT, DEFAULT_CLIENT), is(true));
+        assertThat(authorizer.canWrite(Topic.asTopic(DEFAULT_TOPIC), DEFAULT_PEER_CERT, DEFAULT_CLIENT), is(true));
+    }
+
+    @Test
+    void GIVEN_authorizedClient_WHEN_onDisconnectAndCheckValid_THEN_returnTrue() throws AuthenticationException,
+        AuthorizationException {
+        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
+
+        when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
+        configureConnectResponse(true);
+
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
+
+        authorizer.new ConnectionTerminationListener()
+            .onDisconnect(new InterceptDisconnectMessage(DEFAULT_CLIENT, DEFAULT_PEER_CERT));
+        verify(mockClientDevicesAuthService).closeClientDeviceAuthSession(DEFAULT_SESSION);
+        assertThat(authorizer.getSessionForClient(DEFAULT_CLIENT, DEFAULT_PEER_CERT), nullValue());
+
+        when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
+        configureConnectResponse(true);
+
+        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
     }
 }
