@@ -53,6 +53,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         // Retrieve session ID and construct authorization request for MQTT CONNECT
         UserSessionPair sessionPair;
         String sessionId;
+        boolean canConnect = false;
         try {
             sessionPair = getOrCreateSessionForClient(clientId, username);
             sessionId = sessionPair.getSession();
@@ -62,20 +63,38 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                     + "client ID and has a valid AWS IoT client certificate.");
             return false;
         }
-
-        boolean canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
+        try {
+            canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
+        } catch (AuthorizationException e) {
+            LOG.atWarn().kv(SESSION_ID, sessionId).cause(e).log("Session ID is invalid");
+            try {
+                sessionPair = getOrCreateSessionForClient(clientId, username);
+                sessionId = sessionPair.getSession();
+            } catch (AuthenticationException err) {
+                LOG.atWarn().cause(err).kv(CLIENT_ID, clientId)
+                    .log("Can't create auth session. Check that the thing connects using its thing name as the "
+                        + "client ID and has a valid AWS IoT client certificate.");
+                return false;
+            }
+            try {
+                canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
+            } catch (AuthorizationException err) {
+                LOG.atError().kv(SESSION_ID, sessionId).cause(err).log("Session ID is invalid");
+            }
+        }
 
         // Add mapping from client id to session id for future canRead/canWrite calls
         if (canConnect) {
             LOG.atInfo().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId)
                 .log("Successfully authenticated client device");
+            String finalSessionId = sessionId;
             clientToSessionMap.compute(clientId, (k, v) -> {
                 if (v != null) {
                     LOG.atWarn().kv(CLIENT_ID, clientId).kv("Previous auth session", v.getSession())
                         .log("Duplicate client ID detected. Closing old auth session.");
                     clientDevicesAuthService.closeClientDeviceAuthSession(v.getSession());
                 }
-                return new UserSessionPair(username, sessionId);
+                return new UserSessionPair(username, finalSessionId);
             });
         } else {
             LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device isn't authorized to connect");
@@ -117,19 +136,20 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         if (sessionPair == null) {
             return false;
         }
-
-        return canDevicePerform(sessionPair.getSession(), operation, resource);
+        boolean canPerform = false;
+        try {
+            canPerform = canDevicePerform(sessionPair.getSession(), operation, resource);
+        } catch(AuthorizationException e) {
+            LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Session ID is invalid");
+        }
+        return canPerform;
     }
 
-    private boolean canDevicePerform(String sessionId, String operation, String resource) {
-        try {
-            AuthorizationRequest authorizationRequest =
-                AuthorizationRequest.builder().sessionId(sessionId).operation(operation).resource(resource).build();
-            return clientDevicesAuthService.authorizeClientDeviceAction(authorizationRequest);
-        } catch (AuthorizationException e) {
-            LOG.atError().kv(SESSION_ID, sessionId).cause(e).log("Session ID is invalid");
-        }
-        return false;
+    private boolean canDevicePerform(String sessionId, String operation, String resource) throws
+        AuthorizationException {
+        AuthorizationRequest authorizationRequest =
+            AuthorizationRequest.builder().sessionId(sessionId).operation(operation).resource(resource).build();
+        return clientDevicesAuthService.authorizeClientDeviceAction(authorizationRequest);
     }
 
     UserSessionPair getSessionForClient(String clientId, String username) {
