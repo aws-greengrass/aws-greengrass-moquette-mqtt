@@ -17,6 +17,8 @@ import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.mqtt.moquette.metrics.MqttMetricsCaptor;
+import com.aws.greengrass.mqtt.moquette.metrics.MqttMetricsEmitter;
 import com.aws.greengrass.util.Coerce;
 import io.moquette.BrokerConstants;
 import io.moquette.broker.ISslContextCreator;
@@ -27,7 +29,7 @@ import io.moquette.interception.InterceptHandler;
 
 import java.io.IOException;
 import java.security.KeyStoreException;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import javax.inject.Inject;
@@ -56,19 +58,22 @@ public class MQTTService extends PluginService {
      * @param topics                   Root Configuration topic for this service
      * @param kernel                   Greengrass Nucleus
      * @param clientDevicesAuthService Client devices auth service handle
+     * @param mqttMetricsEmitter       MQTT metrics emitter
      */
     @Inject
-    public MQTTService(Topics topics, Kernel kernel, ClientDevicesAuthServiceApi clientDevicesAuthService) {
+    public MQTTService(Topics topics, Kernel kernel, ClientDevicesAuthServiceApi clientDevicesAuthService,
+                       MqttMetricsEmitter mqttMetricsEmitter) {
         super(topics);
         this.kernel = kernel;
         this.clientDeviceTrustManager = new ClientDeviceTrustManager(clientDevicesAuthService);
         this.clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthService);
-        this.interceptHandlers = Collections.singletonList(clientDeviceAuthorizer.new ConnectionTerminationListener());
+        this.interceptHandlers = Arrays.asList(clientDeviceAuthorizer.new ConnectionTerminationListener(),
+            new MqttMetricsCaptor());
         this.clientDevicesAuthServiceApi = clientDevicesAuthService;
-
         GetCertificateRequestOptions options = new GetCertificateRequestOptions();
         options.setCertificateType(GetCertificateRequestOptions.CertificateType.SERVER);
         serverCertificateRequest = new GetCertificateRequest(SERVICE_NAME, options, this::updateServerCertificate);
+        mqttMetricsEmitter.schedulePeriodicMetricEmit();
     }
 
     @Override

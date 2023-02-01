@@ -11,6 +11,8 @@ import com.aws.greengrass.clientdevices.auth.exception.AuthenticationException;
 import com.aws.greengrass.clientdevices.auth.exception.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.mqtt.moquette.metrics.MetricsStore;
+import com.aws.greengrass.mqtt.moquette.metrics.MetricsStore.MqttMetric;
 import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.Topic;
@@ -29,6 +31,9 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     private static final String CERTIFICATE_PEM = "certificatePem";
     private static final String SESSION_ID = "sessionId";
     private static final String MQTT_CREDENTIAL = "mqtt";
+    private static final String MQTT_CONNECT_OP = "mqtt:connect";
+    private static final String MQTT_PUBLISH_OP = "mqtt:publish";
+    private static final String MQTT_SUBSCRIBE_OP = "mqtt:subscribe";
 
     private final ClientDevicesAuthServiceApi clientDevicesAuthService;
     private final Map<String, UserSessionPair> clientToSessionMap;
@@ -63,7 +68,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             return false;
         }
 
-        boolean canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
+        boolean canConnect = canDevicePerform(sessionId, MQTT_CONNECT_OP, "mqtt:clientId:" + clientId);
 
         // Add mapping from client id to session id for future canRead/canWrite calls
         if (canConnect) {
@@ -80,6 +85,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         } else {
             LOG.atWarn().kv(CLIENT_ID, clientId).kv(SESSION_ID, sessionId).log("Device isn't authorized to connect");
             clientDevicesAuthService.closeClientDeviceAuthSession(sessionId);
+            emitAuthErrorMetric(MQTT_CONNECT_OP);
         }
 
         return canConnect;
@@ -90,12 +96,16 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         String resource = "mqtt:topic:" + topic;
         boolean canPerform = false;
         try {
-            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), "mqtt:publish", resource);
+            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), MQTT_PUBLISH_OP, resource);
         } catch (AuthenticationException e) {
             LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
         }
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT publish request");
+
+        if (!canPerform) {
+            emitAuthErrorMetric(MQTT_PUBLISH_OP);
+        }
         return canPerform;
     }
 
@@ -104,12 +114,16 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         String resource = "mqtt:topicfilter:" + topic;
         boolean canPerform = false;
         try {
-            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), "mqtt:subscribe", resource);
+            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), MQTT_SUBSCRIBE_OP, resource);
         } catch (AuthenticationException e) {
             LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
         }
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT subscribe request");
+
+        if (!canPerform) {
+            emitAuthErrorMetric(MQTT_SUBSCRIBE_OP);
+        }
         return canPerform;
     }
 
@@ -200,5 +214,32 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 clientToSessionMap.remove(clientId, sessionPair);
             }
         }
+    }
+
+    /**
+     * Emits MQTT AuthError metrics for requested MQTT operation.
+     * Ideally these metrics should be emitted from the Moquette request handlers.
+     * Emitting metrics from Authorizer integration to avoid broker code change.
+     *
+     * @param operation Requested MQTT operation
+     */
+    private void emitAuthErrorMetric(String operation) {
+        MqttMetric authErrorMetric;
+        switch (operation) {
+            case MQTT_CONNECT_OP:
+                authErrorMetric = MqttMetric.CONNECT_AUTH_ERROR;
+                break;
+            case MQTT_PUBLISH_OP:
+                authErrorMetric = MqttMetric.PUBLISH_IN_AUTH_ERROR;
+                break;
+            case MQTT_SUBSCRIBE_OP:
+                authErrorMetric = MqttMetric.SUBSCRIBE_AUTH_ERROR;
+                break;
+            default:
+                authErrorMetric = MqttMetric.UNKNOWN_AUTH_ERROR;
+                break;
+        }
+
+        MetricsStore.getInstance().incrementMetricValue(authErrorMetric);
     }
 }
