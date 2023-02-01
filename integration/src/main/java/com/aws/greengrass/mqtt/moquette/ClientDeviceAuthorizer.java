@@ -54,7 +54,6 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         // Retrieve session ID and construct authorization request for MQTT CONNECT
         UserSessionPair sessionPair;
         String sessionId;
-        boolean canConnect = false;
         try {
             sessionPair = getOrCreateSessionForClient(clientId, username);
             sessionId = sessionPair.getSession();
@@ -64,6 +63,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                     + "client ID and has a valid AWS IoT client certificate.");
             return false;
         }
+        boolean canConnect = false;
         try {
             canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
         } catch (InvalidSessionException e) {
