@@ -47,7 +47,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         when(mockClientDevicesAuthService.authorizeClientDeviceAction(authorizationRequest)).thenReturn(doAllow);
     }
 
-    void configureAuthResponseCDA(String session, String operation, String resource, boolean doAllow)
+    void configureAuthResponseException(String session, String operation, String resource, boolean doAllow)
         throws AuthorizationException {
         AuthorizationRequest authorizationRequest =
             AuthorizationRequest.builder().sessionId(session).operation(operation).resource(resource).build();
@@ -64,12 +64,12 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         configureConnectResponse(DEFAULT_SESSION, DEFAULT_CLIENT, doAllow);
     }
 
-    void configureConnectResponseCDA(String session, String clientId, boolean doAllow) throws AuthorizationException {
-        configureAuthResponseCDA(session, "mqtt:connect", "mqtt:clientId:" + clientId, doAllow);
+    void configureConnectResponseException(String session, String clientId, boolean doAllow) throws AuthorizationException {
+        configureAuthResponseException(session, "mqtt:connect", "mqtt:clientId:" + clientId, doAllow);
     }
 
-    void configureConnectResponseCDA(boolean doAllow) throws AuthorizationException {
-        configureConnectResponseCDA(DEFAULT_SESSION, DEFAULT_CLIENT, doAllow);
+    void configureConnectResponseException(boolean doAllow) throws AuthorizationException {
+        configureConnectResponseException(DEFAULT_SESSION, DEFAULT_CLIENT, doAllow);
     }
 
     void configurePublishResponse(String session, String topic, boolean doAllow) throws AuthorizationException {
@@ -258,7 +258,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
-        configureConnectResponseCDA(true);
+        configureConnectResponseException(true);
 
         assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
     }
@@ -270,7 +270,7 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
 
         when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
-        configureConnectResponseCDA(true);
+        configureConnectResponseException(true);
         configureSubscribeResponse(true);
         configurePublishResponse(true);
 

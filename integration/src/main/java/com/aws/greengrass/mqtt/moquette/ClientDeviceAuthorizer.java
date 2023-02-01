@@ -9,6 +9,7 @@ import com.aws.greengrass.clientdevices.auth.AuthorizationRequest;
 import com.aws.greengrass.clientdevices.auth.api.ClientDevicesAuthServiceApi;
 import com.aws.greengrass.clientdevices.auth.exception.AuthenticationException;
 import com.aws.greengrass.clientdevices.auth.exception.AuthorizationException;
+import com.aws.greengrass.clientdevices.auth.exception.InvalidSessionException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import io.moquette.broker.security.IAuthenticator;
@@ -65,8 +66,8 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         }
         try {
             canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
-        } catch (AuthorizationException e) {
-            LOG.atWarn().kv(SESSION_ID, sessionId).cause(e).log("Session ID is invalid");
+        } catch (InvalidSessionException e) {
+            LOG.error("{}: {}", e.getClass().getSimpleName(), e.getMessage());
             try {
                 sessionPair = getOrCreateSessionForClient(clientId, username);
                 sessionId = sessionPair.getSession();
@@ -78,9 +79,13 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             }
             try {
                 canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
+            } catch (InvalidSessionException err) {
+                LOG.error("{}: {}", err.getClass().getSimpleName(), err.getMessage());
             } catch (AuthorizationException err) {
-                LOG.atError().kv(SESSION_ID, sessionId).cause(err).log("Session ID is invalid");
+                LOG.atWarn().kv(SESSION_ID, sessionId).cause(err).log("Authorization Exception");
             }
+        } catch (AuthorizationException e) {
+            LOG.atWarn().kv(SESSION_ID, sessionId).cause(e).log("Authorization Exception");
         }
 
         // Add mapping from client id to session id for future canRead/canWrite calls
@@ -139,8 +144,10 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         boolean canPerform = false;
         try {
             canPerform = canDevicePerform(sessionPair.getSession(), operation, resource);
-        } catch(AuthorizationException e) {
-            LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Session ID is invalid");
+        } catch (InvalidSessionException e) {
+            LOG.error("{}: {}", e.getClass().getSimpleName(), e.getMessage());
+        } catch (AuthorizationException e) {
+            LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Authorization Exception");
         }
         return canPerform;
     }
