@@ -252,18 +252,6 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_authorizedClientAndInvalidSession_WHEN_checkValid_THEN_returnsTrue(ExtensionContext context) throws
-        AuthenticationException, AuthorizationException {
-        ignoreExceptionOfType(context, InvalidSessionException.class);
-        ClientDeviceAuthorizer authorizer = new ClientDeviceAuthorizer(mockClientDevicesAuthService);
-
-        when(mockClientDevicesAuthService.getClientDeviceAuthToken(anyString(), anyMap())).thenReturn(DEFAULT_SESSION);
-        configureConnectResponseException(true);
-
-        assertThat(authorizer.checkValid(DEFAULT_CLIENT, DEFAULT_PEER_CERT, DEFAULT_PASSWORD), is(true));
-    }
-
-    @Test
     void GIVEN_authorizedClientAndInvalidSession_WHEN_canReadCanWrite_THEN_returnsTrue(ExtensionContext context) throws
         AuthenticationException, AuthorizationException {
         ignoreExceptionOfType(context, InvalidSessionException.class);

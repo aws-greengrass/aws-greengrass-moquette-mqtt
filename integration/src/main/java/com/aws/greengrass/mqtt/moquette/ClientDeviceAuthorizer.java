@@ -67,7 +67,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         try {
             canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
         } catch (InvalidSessionException e) {
-            LOG.error("{}: {}", e.getClass().getSimpleName(), e.getMessage());
+            LOG.debug("{}: {}", e.getClass().getSimpleName(), e.getMessage());
             try {
                 sessionPair = getOrCreateSessionForClient(clientId, username);
                 sessionId = sessionPair.getSession();
@@ -145,7 +145,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         try {
             canPerform = canDevicePerform(sessionPair.getSession(), operation, resource);
         } catch (InvalidSessionException e) {
-            LOG.error("{}: {}", e.getClass().getSimpleName(), e.getMessage());
+            LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Session ID is invalid");
         } catch (AuthorizationException e) {
             LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Authorization Exception");
         }
