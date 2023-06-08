@@ -15,10 +15,11 @@
  */
 package io.moquette.broker;
 
-import io.moquette.broker.security.PermitAllAuthorizatorPolicy;
+import io.moquette.broker.security.IAuthenticator;
+import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
 import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
-import io.moquette.broker.security.IAuthenticator;
+import io.moquette.broker.subscriptions.Topic;
 import io.moquette.persistence.MemorySubscriptionsRepository;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -74,8 +75,17 @@ public class MQTTConnectionPublishTest {
         subscriptions.init(subscriptionsRepository);
         queueRepository = new MemoryQueueRepository();
 
-        final PermitAllAuthorizatorPolicy authorizatorPolicy = new PermitAllAuthorizatorPolicy();
-        final Authorizator permitAll = new Authorizator(authorizatorPolicy);
+        final Authorizator permitAll = new Authorizator(new IAuthorizatorPolicy() {
+            @Override
+            public boolean canWrite(Topic topic, String user, String client) {
+                return false;
+            }
+
+            @Override
+            public boolean canRead(Topic topic, String user, String client) {
+                return false;
+            }
+        });
         sessionRegistry = new SessionRegistry(subscriptions, queueRepository, permitAll);
         final PostOffice postOffice = new PostOffice(subscriptions,
             new MemoryRetainedRepository(), sessionRegistry, ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, permitAll, 1024);
@@ -92,6 +102,26 @@ public class MQTTConnectionPublishTest {
             .qos(MqttQoS.AT_MOST_ONCE)
             .payload(payload).build();
 
+        sut.processPublish(publish).completableFuture().get();
+
+        // Verify
+        assertFalse(channel.isOpen(), "Connection should be closed by the broker");
+        payload.release();
+    }
+
+    @Test
+    public void dropConnectionOnPublishWithUnauthorized() throws ExecutionException, InterruptedException {
+        // Connect message with clean session set to true and client id is null.
+        final ByteBuf payload = Unpooled.copiedBuffer("Hello MQTT world!".getBytes(UTF_8));
+        MqttPublishMessage publish = MqttMessageBuilders.publish()
+            .topicName("abc")
+            .retained(false)
+            .qos(MqttQoS.AT_MOST_ONCE)
+            .payload(payload).build();
+
+        Session sess = sessionRegistry.createOrReopenSession(connMsg.build(), sut.getClientId(), null).session;
+        sut.bindSession(sess);
+        sess.bind(sut);
         sut.processPublish(publish).completableFuture().get();
 
         // Verify
