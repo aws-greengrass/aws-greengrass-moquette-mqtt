@@ -94,7 +94,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .log("Successfully authenticated client device");
             String finalSessionId = sessionId;
             clientToSessionMap.compute(clientId, (k, v) -> {
-                if (v != null) {
+                if (v != null && !(finalSessionId.equals(v.getSession()))) {
                     LOG.atWarn().kv(CLIENT_ID, clientId).kv("Previous auth session", v.getSession())
                         .log("Duplicate client ID detected. Closing old auth session.");
                     clientDevicesAuthService.closeClientDeviceAuthSession(v.getSession());
