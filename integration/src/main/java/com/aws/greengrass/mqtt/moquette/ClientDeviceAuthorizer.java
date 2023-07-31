@@ -68,6 +68,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
         } catch (InvalidSessionException e) {
             LOG.debug("{}: {}", e.getClass().getSimpleName(), e.getMessage());
+            clientToSessionMap.remove(clientId, sessionPair);
             try {
                 sessionPair = getOrCreateSessionForClient(clientId, username);
                 sessionId = sessionPair.getSession();
@@ -146,6 +147,9 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             canPerform = canDevicePerform(sessionPair.getSession(), operation, resource);
         } catch (InvalidSessionException e) {
             LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Session ID is invalid");
+            //TODO: We have a session in moquette but not in cda. Maybe here we remove the session from moquette
+            // since its invalid, and then we retry with a new session
+            // we don't have the clientId here
         } catch (AuthorizationException e) {
             LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Authorization Exception");
         }
