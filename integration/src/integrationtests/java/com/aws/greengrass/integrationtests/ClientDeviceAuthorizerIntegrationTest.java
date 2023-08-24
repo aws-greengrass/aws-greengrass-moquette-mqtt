@@ -34,6 +34,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.KeyStoreException;
+import java.security.UnrecoverableKeyException;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Optional;
@@ -64,6 +65,7 @@ public class ClientDeviceAuthorizerIntegrationTest {
         ignoreExceptionOfType(context, NoSuchFileException.class); // Loading CA keystore
         ignoreExceptionOfType(context, NullPointerException.class); // Uploading Core Device CA
         ignoreExceptionOfType(context, KeyStoreException.class);
+        ignoreExceptionOfType(context, UnrecoverableKeyException.class);
 
         // Set this property for kernel to scan its own classpath to find plugins
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
