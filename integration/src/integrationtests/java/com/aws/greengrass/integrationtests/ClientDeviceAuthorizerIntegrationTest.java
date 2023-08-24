@@ -8,9 +8,8 @@ package com.aws.greengrass.integrationtests;
 import com.aws.greengrass.clientdevices.auth.api.ClientDevicesAuthServiceApi;
 import com.aws.greengrass.clientdevices.auth.certificate.CertificateHelper;
 import com.aws.greengrass.clientdevices.auth.iot.Certificate;
-import com.aws.greengrass.clientdevices.auth.iot.CertificateRegistry;
+import com.aws.greengrass.clientdevices.auth.iot.IotAuthClient;
 import com.aws.greengrass.clientdevices.auth.iot.Thing;
-import com.aws.greengrass.clientdevices.auth.iot.infra.ThingRegistry;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.integrationtests.helpers.CertificateTestHelpersMoquette;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
@@ -28,18 +27,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.NoSuchFileException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.KeyStoreException;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({GGExtension.class, MockitoExtension.class})
 public class ClientDeviceAuthorizerIntegrationTest {
@@ -50,29 +53,24 @@ public class ClientDeviceAuthorizerIntegrationTest {
     private static final long TEST_TIME_OUT_SEC = 30L;
     @TempDir
     Path rootDir;
-    private Certificate certificate;
+    private Optional<String> certId = Optional.of("certId");
     private String clientPem;
+    @Mock
+    IotAuthClient iotAuthClient;
 
     @BeforeEach
     void setup(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, SpoolerStoreException.class);
         ignoreExceptionOfType(context, NoSuchFileException.class); // Loading CA keystore
+        ignoreExceptionOfType(context, NullPointerException.class); // Uploading Core Device CA
+        ignoreExceptionOfType(context, KeyStoreException.class);
+
         // Set this property for kernel to scan its own classpath to find plugins
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         startNucleusWithConfig();
 
         List<X509Certificate> clientCertificates = CertificateTestHelpersMoquette.createClientCertificates(1);
-        String clientPem = CertificateHelper.toPem(clientCertificates.get(0));
-        CertificateRegistry certificateRegistry = kernel.getContext().get(CertificateRegistry.class);
-        Certificate cert = certificateRegistry.getOrCreateCertificate(clientPem);
-        cert.setStatus(Certificate.Status.ACTIVE);
-
-        // activate certificate
-        certificateRegistry.updateCertificate(cert);
-        this.certificate = cert;
-        this.clientPem = clientPem;
-
-        registerThing();
+        this.clientPem = CertificateHelper.toPem(clientCertificates.get(0));
     }
 
     @AfterEach
@@ -82,6 +80,7 @@ public class ClientDeviceAuthorizerIntegrationTest {
 
     void startNucleusWithConfig() throws InterruptedException {
         kernel = new Kernel();
+        kernel.getContext().put(IotAuthClient.class, iotAuthClient);
 
         CountDownLatch serviceRunning = new CountDownLatch(1);
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
@@ -97,13 +96,6 @@ public class ClientDeviceAuthorizerIntegrationTest {
         kernel.getContext().removeGlobalStateChangeListener(listener);
     }
 
-    void registerThing() {
-        ThingRegistry thingRegistry = kernel.getContext().get(ThingRegistry.class);
-        Thing myThing = thingRegistry.createThing(DEFAULT_CLIENT);
-        myThing.attachCertificate(certificate.getCertificateId());
-        thingRegistry.updateThing(myThing);
-    }
-
     @Test
     void GIVEN_duplicate_client_ids_WHEN_check_valid_THEN_can_read_returns_true() {
         ClientDevicesAuthServiceApi clientDevicesAuthServiceApi = kernel.getContext().get(ClientDevicesAuthServiceApi.class);
@@ -111,10 +103,14 @@ public class ClientDeviceAuthorizerIntegrationTest {
         ClientDeviceAuthorizer clientDeviceAuthorizer = new ClientDeviceAuthorizer(clientDevicesAuthServiceApi);
 
         Topic topic = new Topic(DEFAULT_TOPIC);
+        Thing thing = new Thing(DEFAULT_CLIENT);
+        Certificate cert = new Certificate(this.certId.get());
+        when(iotAuthClient.getActiveCertificateId(this.clientPem)).thenReturn(this.certId);
+        when(iotAuthClient.isThingAttachedToCertificate(thing, cert)).thenReturn(true);
 
-        assert(clientDeviceAuthorizer.checkValid(DEFAULT_CLIENT, this.clientPem, DEFAULT_PASSWORD));
-        assert(clientDeviceAuthorizer.checkValid(DEFAULT_CLIENT, this.clientPem, DEFAULT_PASSWORD));
-        assert(clientDeviceAuthorizer.canRead(topic, this.clientPem, DEFAULT_CLIENT));
+        assertTrue(clientDeviceAuthorizer.checkValid(DEFAULT_CLIENT, this.clientPem, DEFAULT_PASSWORD));
+        assertTrue(clientDeviceAuthorizer.checkValid(DEFAULT_CLIENT, this.clientPem, DEFAULT_PASSWORD));
+        assertTrue(clientDeviceAuthorizer.canRead(topic, this.clientPem, DEFAULT_CLIENT));
     }
 
     @Test
@@ -127,13 +123,18 @@ public class ClientDeviceAuthorizerIntegrationTest {
             clientDeviceAuthorizer.new ConnectionTerminationListener();
 
         Topic topic = new Topic(DEFAULT_TOPIC);
+        Thing thing = new Thing(DEFAULT_CLIENT);
+        Certificate cert = new Certificate(this.certId.get());
+        when(iotAuthClient.getActiveCertificateId(this.clientPem)).thenReturn(this.certId);
+        when(iotAuthClient.isThingAttachedToCertificate(thing, cert)).thenReturn(true);
 
-        assert(clientDeviceAuthorizer.checkValid(DEFAULT_CLIENT, this.clientPem, DEFAULT_PASSWORD));
+        assertTrue(clientDeviceAuthorizer.checkValid(DEFAULT_CLIENT, this.clientPem, DEFAULT_PASSWORD));
 
         InterceptDisconnectMessage msg = new InterceptDisconnectMessage(DEFAULT_CLIENT, this.clientPem);
         connectionTerminationListener.onDisconnect(msg);
 
-        assert(clientDeviceAuthorizer.canRead(topic, this.clientPem, DEFAULT_CLIENT));
+        assertTrue(clientDeviceAuthorizer.canRead(topic, this.clientPem, DEFAULT_CLIENT));
+        assertTrue(clientDeviceAuthorizer.checkValid(DEFAULT_CLIENT, this.clientPem, DEFAULT_PASSWORD));
     }
 }
 

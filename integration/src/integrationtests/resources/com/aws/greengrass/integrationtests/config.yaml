@@ -22,9 +22,6 @@ services:
                                 - "*"
     aws.greengrass.clientdevices.mqtt.Moquette: {}
     main:
-        lifecycle:
-            install:
-                all: echo All installed
         dependencies:
             - aws.greengrass.Nucleus
             - aws.greengrass.clientdevices.Auth
