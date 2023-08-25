@@ -135,13 +135,10 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         boolean canPerform = false;
         try {
             UserSessionPair sessionPair = getOrCreateSessionForClient(client, user);
-            if (sessionPair == null) {
-                return false;
-            }
             try {
                 canPerform = canDevicePerform(sessionPair.getSession(), operation, resource);
             } catch (InvalidSessionException e) {
-                LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Session ID is invalid");
+                LOG.atError().kv(SESSION_ID, sessionPair.getSession()).log("Session ID is invalid");
                 // Remove session in Moquette since it's not in CDA
                 clientToSessionMap.remove(client, sessionPair);
             } catch (AuthorizationException e) {

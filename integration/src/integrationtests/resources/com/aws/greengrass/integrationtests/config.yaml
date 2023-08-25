@@ -2,8 +2,9 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
+
+---
 services:
-    aws.greengrass.Nucleus: {}
     aws.greengrass.clientdevices.Auth:
         configuration:
             deviceGroups:
@@ -20,10 +21,7 @@ services:
                                 - "*"
                             resources:
                                 - "*"
-    aws.greengrass.clientdevices.mqtt.Moquette: {}
     main:
         dependencies:
-            - aws.greengrass.Nucleus
             - aws.greengrass.clientdevices.Auth
-            - aws.greengrass.clientdevices.mqtt.Moquette
 

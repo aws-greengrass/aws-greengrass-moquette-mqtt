@@ -54,7 +54,7 @@ public class ClientDeviceAuthorizerIntegrationTest {
     private static final long TEST_TIME_OUT_SEC = 30L;
     @TempDir
     Path rootDir;
-    private Optional<String> certId = Optional.of("certId");
+    private final Optional<String> certId = Optional.of("certId");
     private String clientPem;
     @Mock
     IotAuthClient iotAuthClient;
@@ -80,7 +80,7 @@ public class ClientDeviceAuthorizerIntegrationTest {
         kernel.shutdown();
     }
 
-    void startNucleusWithConfig() throws InterruptedException {
+    private void startNucleusWithConfig() throws InterruptedException {
         kernel = new Kernel();
         kernel.getContext().put(IotAuthClient.class, iotAuthClient);
 
