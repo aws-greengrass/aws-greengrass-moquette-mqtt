@@ -125,7 +125,11 @@ public class ClientDeviceAuthorizerTest extends GGServiceTestUtil {
         ClientDeviceAuthorizer.UserSessionPair pair2 = authorizer.getSessionForClient(DEFAULT_CLIENT, USERNAME2);
         assertThat(pair2.getSession(), is("SESSION2"));
 
-        verify(mockClientDevicesAuthService).closeClientDeviceAuthSession("SESSION1");
+        mockClientDevicesAuthService.closeClientDeviceAuthSession("SESSION2");
+        assertThat(authorizer.getSessionForClient(DEFAULT_CLIENT, USERNAME2).getSession(), is("SESSION2"));
+        ClientDeviceAuthorizer.UserSessionPair pair3 = authorizer.getOrCreateSessionForClient(DEFAULT_CLIENT,
+            USERNAME2);
+        assertThat(pair3.getSession(), is("SESSION2"));
     }
 
     @Test

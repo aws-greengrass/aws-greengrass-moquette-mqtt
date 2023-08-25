@@ -68,6 +68,8 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
         } catch (InvalidSessionException e) {
             LOG.debug("{}: {}", e.getClass().getSimpleName(), e.getMessage());
+            // Remove session in Moquette since it's not in CDA
+            clientToSessionMap.remove(clientId, sessionPair);
             try {
                 sessionPair = getOrCreateSessionForClient(clientId, username);
                 sessionId = sessionPair.getSession();
@@ -81,6 +83,8 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 canConnect = canDevicePerform(sessionId, "mqtt:connect", "mqtt:clientId:" + clientId);
             } catch (InvalidSessionException err) {
                 LOG.error("{}: {}", err.getClass().getSimpleName(), err.getMessage());
+                // Remove session in Moquette since it's not in CDA
+                clientToSessionMap.remove(clientId, sessionPair);
             } catch (AuthorizationException err) {
                 LOG.atWarn().kv(SESSION_ID, sessionId).cause(err).log("Authorization Exception");
             }
@@ -94,7 +98,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
                 .log("Successfully authenticated client device");
             String finalSessionId = sessionId;
             clientToSessionMap.compute(clientId, (k, v) -> {
-                if (v != null) {
+                if (v != null && !(finalSessionId.equals(v.getSession()))) {
                     LOG.atWarn().kv(CLIENT_ID, clientId).kv("Previous auth session", v.getSession())
                         .log("Duplicate client ID detected. Closing old auth session.");
                     clientDevicesAuthService.closeClientDeviceAuthSession(v.getSession());
@@ -112,12 +116,7 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     @Override
     public boolean canWrite(Topic topic, String user, String client) {
         String resource = "mqtt:topic:" + topic;
-        boolean canPerform = false;
-        try {
-            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), "mqtt:publish", resource);
-        } catch (AuthenticationException e) {
-            LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
-        }
+        boolean canPerform = canDevicePerform(client, user, "mqtt:publish", resource);
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT publish request");
         return canPerform;
@@ -126,28 +125,27 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
     @Override
     public boolean canRead(Topic topic, String user, String client) {
         String resource = "mqtt:topicfilter:" + topic;
-        boolean canPerform = false;
-        try {
-            canPerform = canDevicePerform(getOrCreateSessionForClient(client, user), "mqtt:subscribe", resource);
-        } catch (AuthenticationException e) {
-            LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
-        }
+        boolean canPerform = canDevicePerform(client, user, "mqtt:subscribe", resource);
         LOG.atDebug().kv("topic", topic).kv("isAllowed", canPerform).kv(CLIENT_ID, client)
             .log("MQTT subscribe request");
         return canPerform;
     }
 
-    private boolean canDevicePerform(UserSessionPair sessionPair, String operation, String resource) {
-        if (sessionPair == null) {
-            return false;
-        }
+    private boolean canDevicePerform(String client, String user, String operation, String resource) {
         boolean canPerform = false;
         try {
-            canPerform = canDevicePerform(sessionPair.getSession(), operation, resource);
-        } catch (InvalidSessionException e) {
-            LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Session ID is invalid");
-        } catch (AuthorizationException e) {
-            LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Authorization Exception");
+            UserSessionPair sessionPair = getOrCreateSessionForClient(client, user);
+            try {
+                canPerform = canDevicePerform(sessionPair.getSession(), operation, resource);
+            } catch (InvalidSessionException e) {
+                LOG.atError().kv(SESSION_ID, sessionPair.getSession()).log("Session ID is invalid");
+                // Remove session in Moquette since it's not in CDA
+                clientToSessionMap.remove(client, sessionPair);
+            } catch (AuthorizationException e) {
+                LOG.atError().kv(SESSION_ID, sessionPair.getSession()).cause(e).log("Authorization Exception");
+            }
+        } catch (AuthenticationException e) {
+            LOG.atWarn().cause(e).kv(CLIENT_ID, client).log("Unable to re-authenticate client.");
         }
         return canPerform;
     }
@@ -181,7 +179,9 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
         mqttCredentials.put(CLIENT_ID, clientId);
 
         String sessionId = clientDevicesAuthService.getClientDeviceAuthToken(MQTT_CREDENTIAL, mqttCredentials);
-        return new UserSessionPair(username, sessionId);
+        UserSessionPair sessionPair = new UserSessionPair(username, sessionId);
+        clientToSessionMap.put(clientId, sessionPair);
+        return sessionPair;
     }
 
     class UserSessionPair {

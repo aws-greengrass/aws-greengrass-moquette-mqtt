@@ -1,0 +1,27 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+---
+services:
+    aws.greengrass.clientdevices.Auth:
+        configuration:
+            deviceGroups:
+                formatVersion: "2021-03-05"
+                definitions:
+                    myThing:
+                        selectionRule: "thingName:myThing"
+                        policyName: "thingAccessPolicy"
+                policies:
+                    thingAccessPolicy:
+                        policyStatement1:
+                            statementDescription: "Allow client devices to perform all actions"
+                            operations:
+                                - "*"
+                            resources:
+                                - "*"
+    main:
+        dependencies:
+            - aws.greengrass.clientdevices.Auth
+
