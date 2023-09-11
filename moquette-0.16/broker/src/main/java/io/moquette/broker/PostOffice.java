@@ -315,10 +315,12 @@ class PostOffice {
         mqttConnection.sendUnsubAckMessage(topics, clientID, messageId);
     }
 
-    CompletableFuture<Void> receivedPublishQos0(Topic topic, String username, String clientID, MqttPublishMessage msg) {
+    CompletableFuture<Void> receivedPublishQos0(MQTTConnection connection, Topic topic, String username, String clientID,
+                                                MqttPublishMessage msg) {
         if (!authorizator.canWrite(topic, username, clientID)) {
             LOG.error("client is not authorized to publish on topic: {}", topic);
             ReferenceCountUtil.release(msg);
+            connection.dropConnection();
             return CompletableFuture.completedFuture(null);
         }
         final RoutingResults publishResult = publish2Subscribers(msg.payload(), topic, AT_MOST_ONCE);
@@ -352,6 +354,7 @@ class PostOffice {
         final String clientId = connection.getClientId();
         if (!authorizator.canWrite(topic, username, clientId)) {
             LOG.error("MQTT client: {} is not authorized to publish on topic: {}", clientId, topic);
+            connection.dropConnection();
             ReferenceCountUtil.release(msg);
             return RoutingResults.preroutingError();
         }
