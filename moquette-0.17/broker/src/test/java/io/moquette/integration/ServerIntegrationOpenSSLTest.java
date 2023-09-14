@@ -37,7 +37,7 @@ public class ServerIntegrationOpenSSLTest extends ServerIntegrationSSLTest {
     private static final Logger LOG = LoggerFactory.getLogger(ServerIntegrationOpenSSLTest.class);
 
     @BeforeAll
-    public static void beforeTests() {
+    public static void checkForOpenSSL() {
         Assumptions.assumeTrue(new OpensslChecker(), "OpenSSL is available");
     }
 
@@ -57,6 +57,7 @@ public class ServerIntegrationOpenSSLTest extends ServerIntegrationSSLTest {
         sslProps.put(IConfig.KEY_MANAGER_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
         sslProps.put(IConfig.DATA_PATH_PROPERTY_NAME, dbPath);
         sslProps.put(IConfig.PERSISTENCE_ENABLED_PROPERTY_NAME, "true");
+        sslProps.put(IConfig.PERSISTENT_QUEUE_TYPE_PROPERTY_NAME, "h2");
 
         sslProps.put(IConfig.ENABLE_TELEMETRY_NAME, "false");
         m_server.startServer(sslProps);

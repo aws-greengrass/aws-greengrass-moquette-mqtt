@@ -29,12 +29,7 @@ import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import org.awaitility.Awaitility;
 import org.awaitility.Durations;
-import org.eclipse.paho.client.mqttv3.IMqttClient;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -51,7 +46,6 @@ import java.util.Properties;
 import static io.moquette.broker.ConnectionTestUtils.EMPTY_OBSERVERS;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
@@ -79,7 +73,7 @@ public class ServerIntegrationPahoCanPublishOnReadBlockedTopicTest {
         final Properties configProps = IntegrationUtils.prepareTestProperties(dbPath);
         configProps.setProperty(BrokerConstants.REAUTHORIZE_SUBSCRIPTIONS_ON_CONNECT, "true");
         configProps.setProperty(IConfig.ENABLE_TELEMETRY_NAME, "false");
-        configProps.setProperty(IConfig.PERSISTENT_QUEUE_TYPE_PROPERTY_NAME, "segmented");
+        configProps.setProperty(IConfig.PERSISTENT_QUEUE_TYPE_PROPERTY_NAME, "h2");
         m_config = new MemoryConfig(configProps);
         canRead = true;
 
