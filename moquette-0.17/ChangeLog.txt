@@ -1,3 +1,19 @@
+Version 0.17-SNAPSHOT:
+   [feature] Introduced DSL FluentConfig to simplify Server's API instantiation #761.
+   [fix] resolved issue #633 of bad perfomance when adding many subscriptions to few topics, resolved in #758.
+   [fix] resolved issue #629 that originated from subscription trees wide and flat, resolved in #630
+   [dependency] updated Netty to 4.1.93 and tcnative to 2.0.61 (#755)
+   [feature] add saved session expiry configurable through the `persistent_client_expiration` setting (#739).
+   [feature] implemented methods to forcibly disconnects a clients from a Server instance (#744).
+   [refactory] moved code to handle session event loops from PostOffice into separate SessionEventLoopGroup (#742).
+   [feature] added new callback method in interceptor to notify exceptions that happens on SessionEventLoop (#736).
+   [feature] introduce new `buffer_flush_millis` deprecating the old `immediate_buffer_flush` and switch default behavior to flush on every write (#738).
+   [refactory] purge of session state also on disconnect and reused logic (#715).
+   [feature] add `moquette.session_loop.debug` property to enable session loop checking assignments (#714).
+   [break] deprecate `persistent_store` to separate the enablement of persistence with `persistence_enabled` and the path `data_path` (#706).
+   [enhancement] introduced new queue implementation based on segments in memory mapped files. The type of queue implementation
+   could be selected by setting `persistent_queue_type` (#691, #704).
+
 Version 0.16:
    [build] drop generation of broker-test, removed distribution and embedding_moquette modules from deploy phase (#616)
    [fix] introduces sessions event processors to segregate changes to a session in one single thread, simplifying concurrency and code (#631)

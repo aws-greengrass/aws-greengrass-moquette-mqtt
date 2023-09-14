@@ -6,13 +6,21 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.MqttQoS;
+import io.netty.handler.codec.mqtt.MqttVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.moquette.BrokerConstants.FLIGHT_BEFORE_RESEND_MS;
 import io.moquette.broker.subscriptions.Subscription;
+
+import java.time.Clock;
 import java.util.Arrays;
 import org.assertj.core.api.Assertions;
+
+import static io.moquette.broker.Session.INFINITE_EXPIRY;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static io.moquette.BrokerConstants.NO_BUFFER_FLUSH;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SessionTest {
@@ -27,7 +35,9 @@ public class SessionTest {
     public void setUp() {
         testChannel = new EmbeddedChannel();
         queuedMessages = new InMemoryQueue();
-        client = new Session(CLIENT_ID, true, null, queuedMessages);
+        final Clock clock = Clock.systemDefaultZone();
+        final ISessionsRepository.SessionData data = new ISessionsRepository.SessionData(CLIENT_ID, MqttVersion.MQTT_3_1_1, INFINITE_EXPIRY, clock);
+        client = new Session(data, true, null, queuedMessages);
         createConnection(client);
     }
 
@@ -114,7 +124,7 @@ public class SessionTest {
     }
 
     private void createConnection(Session client) {
-        BrokerConfiguration brokerConfiguration = new BrokerConfiguration(true, false, false, false);
+        BrokerConfiguration brokerConfiguration = new BrokerConfiguration(true, false, false, NO_BUFFER_FLUSH);
         MQTTConnection mqttConnection = new MQTTConnection(testChannel, brokerConfiguration, null, null, null);
         client.markConnecting();
         client.bind(mqttConnection);

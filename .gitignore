@@ -1,3 +1,6 @@
+data/
 greengrass-build/
 integration/target/**
+target/
+.gradle/
 *.iml

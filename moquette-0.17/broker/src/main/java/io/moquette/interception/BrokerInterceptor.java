@@ -128,8 +128,8 @@ public final class BrokerInterceptor implements Interceptor {
                     int messageId = msg.variableHeader().messageId();
                     String topic = msg.variableHeader().topicName();
                     for (InterceptHandler handler : handlers.get(InterceptPublishMessage.class)) {
-                        LOG.debug("Notifying MQTT PUBLISH message to interceptor. CId={}, messageId={}, topic={}, "
-                                + "interceptorId={}", clientID, messageId, topic, handler.getID());
+                        LOG.debug("Notifying unexpected MQTT client disconnection to interceptor CId={}, " +
+                            "interceptorId={}", clientID, handler.getID());
                         // Sending to the outside, make a retainedDuplicate.
                         handler.onPublish(new InterceptPublishMessage(msg.retainedDuplicate(), clientID, username));
                     }
@@ -163,6 +163,13 @@ public final class BrokerInterceptor implements Interceptor {
             LOG.debug("Notifying MQTT ACK message to interceptor. CId={}, messageId={}, topic={}, interceptorId={}",
                 msg.getMsg()/*.getClientID()*/, msg.getPacketID(), msg.getTopic(), handler.getID());
             executor.execute(() -> handler.onMessageAcknowledged(msg));
+        }
+    }
+
+    @Override
+    public void notifyLoopException(InterceptExceptionMessage msg) {
+        for (final InterceptHandler handler : this.handlers.get(InterceptExceptionMessage.class)) {
+            handler.onSessionLoopError(msg.getError());
         }
     }
 

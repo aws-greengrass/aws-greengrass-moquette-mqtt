@@ -1,6 +1,5 @@
 package io.moquette.integration;
 
-import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.MemoryConfig;
@@ -54,7 +53,7 @@ public class PublishToManySubscribersUseCaseTest extends AbstractIntegration {
     protected void startServer(String dbPath) throws IOException {
         broker = new Server();
         final Properties configProps = IntegrationUtils.prepareTestProperties(dbPath);
-        configProps.put(BrokerConstants.SESSION_QUEUE_SIZE, Integer.toString(COMMAND_QUEUE_SIZE));
+        configProps.put(IConfig.SESSION_QUEUE_SIZE, Integer.toString(COMMAND_QUEUE_SIZE));
         IConfig brokerConfig = new MemoryConfig(configProps);
         broker.startServer(brokerConfig);
     }
@@ -163,7 +162,7 @@ public class PublishToManySubscribersUseCaseTest extends AbstractIntegration {
     }
 
     private void segmentedParallelSubscriptions(BiConsumer<IMqttAsyncClient, IMqttActionListener> biConsumer) throws InterruptedException {
-        int openSlotCount = COMMAND_QUEUE_SIZE;
+        int openSlotCount = COMMAND_QUEUE_SIZE / 2;
         Semaphore openSlots = new Semaphore(openSlotCount);
         IMqttActionListener completionCallback = createMqttCallback(openSlots);
         for (IMqttAsyncClient subscriber : this.subscribers) {

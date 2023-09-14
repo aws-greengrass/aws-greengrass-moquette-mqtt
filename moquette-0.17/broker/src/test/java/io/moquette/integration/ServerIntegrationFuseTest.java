@@ -103,8 +103,8 @@ public class ServerIntegrationFuseTest {
         // Exercise, kill the publisher connection
         m_publisher.kill();
 
-        // Verify, that the testament is fired (wait the flush interval (1 sec) + small buffer)
-        Message msg = m_subscriber.receive(1500, TimeUnit.MILLISECONDS);
+        // Verify, that the testament is fired
+        Message msg = m_subscriber.receive(1, TimeUnit.SECONDS); // wait the flush interval (1 sec)
         assertNotNull(msg, "We should get notified with 'Will' message");
         msg.ack();
         assertEquals(willTestamentMsg, new String(msg.getPayload(), UTF_8));

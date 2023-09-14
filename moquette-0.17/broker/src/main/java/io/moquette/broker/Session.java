@@ -22,13 +22,25 @@ import io.moquette.broker.SessionRegistry.PublishedMessage;
 import io.moquette.broker.subscriptions.Subscription;
 import io.moquette.broker.subscriptions.Topic;
 import io.netty.buffer.ByteBuf;
-import io.netty.handler.codec.mqtt.*;
+import io.netty.handler.codec.mqtt.MqttFixedHeader;
+import io.netty.handler.codec.mqtt.MqttMessage;
+import io.netty.handler.codec.mqtt.MqttMessageType;
+import io.netty.handler.codec.mqtt.MqttPublishMessage;
+import io.netty.handler.codec.mqtt.MqttPublishVariableHeader;
+import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.util.ReferenceCountUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +50,9 @@ import java.util.concurrent.atomic.AtomicReference;
 class Session {
 
     private static final Logger LOG = LoggerFactory.getLogger(Session.class);
+    // By specification session expiry value of 0xEFFFFFFF (UINT_MAX) (seconds) means
+    // session that doesn't expire, it's ~68 years.
+    static final int INFINITE_EXPIRY = Integer.MAX_VALUE;
 
     static class InFlightPacket implements Delayed {
 
@@ -87,7 +102,6 @@ class Session {
         }
     }
 
-    private final String clientId;
     private boolean clean;
     private Will will;
     private final SessionMessageQueue<SessionRegistry.EnqueuedMessage> sessionQueue;
@@ -98,19 +112,24 @@ class Session {
     private final DelayQueue<InFlightPacket> inflightTimeouts = new DelayQueue<>();
     private final Map<Integer, MqttPublishMessage> qos2Receiving = new HashMap<>();
     private final AtomicInteger inflightSlots = new AtomicInteger(INFLIGHT_WINDOW_SIZE); // this should be configurable
+    private final ISessionsRepository.SessionData data;
 
-    Session(String clientId, boolean clean, Will will, SessionMessageQueue<SessionRegistry.EnqueuedMessage> sessionQueue) {
-        this(clientId, clean, sessionQueue);
+    Session(ISessionsRepository.SessionData data, boolean clean, Will will, SessionMessageQueue<SessionRegistry.EnqueuedMessage> sessionQueue) {
+        this(data, clean, sessionQueue);
         this.will = will;
     }
 
-    Session(String clientId, boolean clean, SessionMessageQueue<SessionRegistry.EnqueuedMessage> sessionQueue) {
+    Session(ISessionsRepository.SessionData data, boolean clean, SessionMessageQueue<SessionRegistry.EnqueuedMessage> sessionQueue) {
         if (sessionQueue == null) {
             throw new IllegalArgumentException("sessionQueue parameter can't be null");
         }
-        this.clientId = clientId;
+        this.data = data;
         this.clean = clean;
         this.sessionQueue = sessionQueue;
+    }
+
+    public boolean expireImmediately() {
+        return data.expiryInterval() == 0;
     }
 
     void update(boolean clean, Will will) {
@@ -143,7 +162,7 @@ class Session {
     }
 
     public String getClientID() {
-        return clientId;
+        return data.clientId();
     }
 
     public List<Subscription> getSubscriptions() {
@@ -155,7 +174,7 @@ class Session {
     }
 
     public void removeSubscription(Topic topic) {
-        subscriptions.remove(new Subscription(clientId, topic, MqttQoS.EXACTLY_ONCE));
+        subscriptions.remove(new Subscription(data.clientId(), topic, MqttQoS.EXACTLY_ONCE));
     }
 
     public boolean hasWill() {
@@ -410,7 +429,7 @@ class Session {
 
     private void drainQueueToConnection() {
         // consume the queue
-        while (!sessionQueue.isEmpty() && inflighHasSlotsAndConnectionIsUp()) {
+        while (connected() && !sessionQueue.isEmpty() && inflighHasSlotsAndConnectionIsUp()) {
             final SessionRegistry.EnqueuedMessage msg = sessionQueue.dequeue();
             if (msg == null) {
                 // Our message was already fetched by another Thread.
@@ -482,10 +501,14 @@ class Session {
         }
     }
 
+    ISessionsRepository.SessionData getSessionData() {
+        return this.data;
+    }
+
     @Override
     public String toString() {
         return "Session{" +
-            "clientId='" + clientId + '\'' +
+            "clientId='" + data.clientId() + '\'' +
             ", clean=" + clean +
             ", status=" + status +
             ", inflightSlots=" + inflightSlots +

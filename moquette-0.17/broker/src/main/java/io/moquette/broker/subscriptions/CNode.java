@@ -17,21 +17,22 @@ package io.moquette.broker.subscriptions;
 
 import java.util.*;
 
-class CNode {
+class CNode implements Comparable<CNode> {
 
-    private Token token;
-    private List<INode> children;
-    Set<Subscription> subscriptions;
+    private final Token token;
+    private final List<INode> children;
+    List<Subscription> subscriptions;
 
-    CNode() {
+    CNode(Token token) {
         this.children = new ArrayList<>();
-        this.subscriptions = new HashSet<>();
+        this.subscriptions = new ArrayList<>();
+        this.token = token;
     }
 
     //Copy constructor
-    private CNode(Token token, List<INode> children, Set<Subscription> subscriptions) {
+    private CNode(Token token, List<INode> children, List<Subscription> subscriptions) {
         this.token = token; // keep reference, root comparison in directory logic relies on it for now.
-        this.subscriptions = new HashSet<>(subscriptions);
+        this.subscriptions = new ArrayList<>(subscriptions);
         this.children = new ArrayList<>(children);
     }
 
@@ -39,32 +40,21 @@ class CNode {
         return token;
     }
 
-    public void setToken(Token token) {
-        this.token = token;
-    }
-
-    boolean anyChildrenMatch(Token token) {
-        for (INode iNode : children) {
-            final CNode child = iNode.mainNode();
-            if (child.equalsToken(token)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     List<INode> allChildren() {
-        return this.children;
+        return new ArrayList<>(this.children);
     }
 
-    INode childOf(Token token) {
-        for (INode iNode : children) {
-            final CNode child = iNode.mainNode();
-            if (child.equalsToken(token)) {
-                return iNode;
-            }
+    Optional<INode> childOf(Token token) {
+        int idx = findIndexForToken(token);
+        if (idx < 0) {
+            return Optional.empty();
         }
-        throw new IllegalArgumentException("Asked for a token that doesn't exists in any child [" + token + "]");
+        return Optional.of(children.get(idx));
+    }
+
+    private int findIndexForToken(Token token) {
+        final INode tempTokenNode = new INode(new CNode(token));
+        return Collections.binarySearch(children, tempTokenNode, (INode node, INode tokenHolder) -> node.mainNode().token.compareTo(tokenHolder.mainNode().token));
     }
 
     private boolean equalsToken(Token token) {
@@ -81,25 +71,30 @@ class CNode {
     }
 
     public void add(INode newINode) {
-        this.children.add(newINode);
+        int idx = findIndexForToken(newINode.mainNode().token);
+        if (idx < 0) {
+            children.add(-1 - idx, newINode);
+        } else {
+            children.add(idx, newINode);
+        }
     }
 
     public void remove(INode node) {
-        this.children.remove(node);
+        int idx = findIndexForToken(node.mainNode().token);
+        this.children.remove(idx);
     }
 
     CNode addSubscription(Subscription newSubscription) {
         // if already contains one with same topic and same client, keep that with higher QoS
-        if (subscriptions.contains(newSubscription)) {
-            final Subscription existing = subscriptions.stream()
-                .filter(s -> s.equals(newSubscription))
-                .findFirst().get();
+        int idx = Collections.binarySearch(subscriptions, newSubscription);
+        if (idx >= 0) {
+            // Subscription already exists
+            final Subscription existing = subscriptions.get(idx);
             if (existing.getRequestedQos().value() < newSubscription.getRequestedQos().value()) {
-                subscriptions.remove(existing);
-                subscriptions.add(new Subscription(newSubscription));
+                subscriptions.set(idx, newSubscription);
             }
         } else {
-            this.subscriptions.add(new Subscription(newSubscription));
+            this.subscriptions.add(-1 - idx, new Subscription(newSubscription));
         }
         return this;
     }
@@ -135,5 +130,10 @@ class CNode {
             }
         }
         this.subscriptions.removeAll(toRemove);
+    }
+
+    @Override
+    public int compareTo(CNode o) {
+        return token.compareTo(o.token);
     }
 }

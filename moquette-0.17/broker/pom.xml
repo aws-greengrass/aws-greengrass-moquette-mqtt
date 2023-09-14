@@ -5,7 +5,7 @@
         <relativePath>../pom.xml</relativePath>
         <artifactId>moquette-parent</artifactId>
         <groupId>io.moquette</groupId>
-        <version>0.16-gg</version>
+        <version>0.17-gg</version>
     </parent>
 
     <artifactId>moquette-broker</artifactId>
@@ -16,8 +16,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <netty.version>4.1.94.Final</netty.version>
         <!-- Check Netty pom.xm to know the right version of tcnative, for example
-             https://github.com/netty/netty/blob/netty-4.1.73.Final/pom.xml#L531 -->
-        <netty.tcnative.version>2.0.52.Final</netty.tcnative.version>
+             https://github.com/netty/netty/blob/netty-4.1.93.Final/pom.xml#L625 -->
+        <netty.tcnative.version>2.0.61.Final</netty.tcnative.version>
         <paho.version>1.2.5</paho.version>
         <h2.version>2.2.220</h2.version>
     </properties>
@@ -165,6 +165,12 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <version>${h2.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>RELEASE</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

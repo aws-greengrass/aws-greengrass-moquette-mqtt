@@ -17,6 +17,7 @@ package io.moquette.broker;
 
 import io.moquette.BrokerConstants;
 import io.moquette.broker.config.FileResourceLoader;
+import io.moquette.broker.config.FluentConfig;
 import io.moquette.broker.config.IConfig;
 import io.moquette.broker.config.IResourceLoader;
 import io.moquette.broker.config.MemoryConfig;
@@ -28,12 +29,15 @@ import io.moquette.broker.security.IAuthenticator;
 import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.security.PermitAllAuthorizatorPolicy;
 import io.moquette.broker.security.ResourceAuthenticator;
+import io.moquette.broker.unsafequeues.QueueException;
 import io.moquette.interception.InterceptHandler;
 import io.moquette.persistence.H2Builder;
+import io.moquette.persistence.MemorySessionsRepository;
 import io.moquette.persistence.MemorySubscriptionsRepository;
 import io.moquette.interception.BrokerInterceptor;
 import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
 import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
+import io.moquette.persistence.SegmentQueueRepository;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +45,10 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.ParseException;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -50,12 +57,13 @@ import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import static io.moquette.broker.Session.INFINITE_EXPIRY;
 import static io.moquette.logging.LoggingUtils.getInterceptorIds;
 
 public class Server {
 
     private static final Logger LOG = LoggerFactory.getLogger(io.moquette.broker.Server.class);
-    public static final String MOQUETTE_VERSION = "0.16";
+    public static final String MOQUETTE_VERSION = "0.17";
 
     private ScheduledExecutorService scheduler;
     private NewNettyAcceptor acceptor;
@@ -157,7 +165,7 @@ public class Server {
     }
 
     public void startServer(IConfig config, List<? extends InterceptHandler> handlers, ISslContextCreator sslCtxCreator,
-                            IAuthenticator authenticator, IAuthorizatorPolicy authorizatorPolicy) {
+                            IAuthenticator authenticator, IAuthorizatorPolicy authorizatorPolicy) throws IOException {
         final long start = System.currentTimeMillis();
         if (handlers == null) {
             handlers = Collections.emptyList();
@@ -170,8 +178,6 @@ public class Server {
         if (handlerProp != null) {
             config.setProperty(BrokerConstants.INTERCEPT_HANDLER_PROPERTY_NAME, handlerProp);
         }
-        final String persistencePath = config.getProperty(BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME);
-        LOG.debug("Configuring Using persistent store file, path: {}", persistencePath);
         initInterceptors(config, handlers);
         LOG.debug("Initialized MQTT protocol processor");
         if (sslCtxCreator == null) {
@@ -181,36 +187,75 @@ public class Server {
         authenticator = initializeAuthenticator(authenticator, config);
         authorizatorPolicy = initializeAuthorizatorPolicy(authorizatorPolicy, config);
 
+        final ISessionsRepository sessionsRepository;
         final ISubscriptionsRepository subscriptionsRepository;
         final IQueueRepository queueRepository;
         final IRetainedRepository retainedRepository;
-        if (persistencePath != null && !persistencePath.isEmpty()) {
-            LOG.trace("Configuring H2 subscriptions store to {}", persistencePath);
-            h2Builder = new H2Builder(config, scheduler).initStore();
+
+        if (config.getProperty(BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME) != null) {
+            LOG.warn("Using a deprecated setting {} please update to {}",
+                BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME, IConfig.DATA_PATH_PROPERTY_NAME);
+            LOG.warn("Forcing {} to true", IConfig.PERSISTENCE_ENABLED_PROPERTY_NAME);
+            config.setProperty(IConfig.PERSISTENCE_ENABLED_PROPERTY_NAME, Boolean.TRUE.toString());
+
+            final String persistencePath = config.getProperty(BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME);
+            final String dataPath = persistencePath.substring(0, persistencePath.lastIndexOf("/"));
+            LOG.warn("Forcing {} to {}", IConfig.DATA_PATH_PROPERTY_NAME, dataPath);
+            config.setProperty(IConfig.DATA_PATH_PROPERTY_NAME, dataPath);
+        }
+
+        final Clock clock = Clock.systemDefaultZone();
+
+        if (Boolean.parseBoolean(config.getProperty(IConfig.PERSISTENCE_ENABLED_PROPERTY_NAME))) {
+            final Path dataPath = Paths.get(config.getProperty(IConfig.DATA_PATH_PROPERTY_NAME));
+            if (!dataPath.toFile().exists()) {
+                if (dataPath.toFile().mkdirs()) {
+                    LOG.debug("Created data_path {} folder", dataPath);
+                } else {
+                    LOG.warn("Impossible to create the data_path {}", dataPath);
+                }
+            }
+
+            LOG.debug("Configuring persistent subscriptions store and queues, path: {}", dataPath);
+            final int autosaveInterval = Integer.parseInt(config.getProperty(BrokerConstants.AUTOSAVE_INTERVAL_PROPERTY_NAME, "30"));
+            h2Builder = new H2Builder(scheduler, dataPath, autosaveInterval, clock).initStore();
+            queueRepository = initQueuesRepository(config, dataPath, h2Builder);
+            LOG.trace("Configuring H2 subscriptions repository");
             subscriptionsRepository = h2Builder.subscriptionsRepository();
-            queueRepository = h2Builder.queueRepository();
             retainedRepository = h2Builder.retainedRepository();
+            sessionsRepository = h2Builder.sessionsRepository();
         } else {
             LOG.trace("Configuring in-memory subscriptions store");
             subscriptionsRepository = new MemorySubscriptionsRepository();
             queueRepository = new MemoryQueueRepository();
             retainedRepository = new MemoryRetainedRepository();
+            sessionsRepository = new MemorySessionsRepository();
         }
 
         ISubscriptionsDirectory subscriptions = new CTrieSubscriptionDirectory();
         subscriptions.init(subscriptionsRepository);
         final Authorizator authorizator = new Authorizator(authorizatorPolicy);
-        sessions = new SessionRegistry(subscriptions, queueRepository, authorizator);
-        final int sessionQueueSize = config.intProp(BrokerConstants.SESSION_QUEUE_SIZE, 1024);
+
+        final int globalSessionExpiry;
+        if (config.getProperty(IConfig.PERSISTENT_CLIENT_EXPIRATION_PROPERTY_NAME) != null) {
+            globalSessionExpiry = (int) config.durationProp(IConfig.PERSISTENT_CLIENT_EXPIRATION_PROPERTY_NAME).toMillis() / 1000;
+        } else {
+            globalSessionExpiry = INFINITE_EXPIRY;
+        }
+
+        final int sessionQueueSize = config.intProp(IConfig.SESSION_QUEUE_SIZE, 1024);
+        final SessionEventLoopGroup loopsGroup = new SessionEventLoopGroup(interceptor, sessionQueueSize);
+        sessions = new SessionRegistry(subscriptions, sessionsRepository, queueRepository, authorizator, scheduler,
+            clock, globalSessionExpiry, loopsGroup);
         dispatcher = new PostOffice(subscriptions, retainedRepository, sessions, interceptor, authorizator,
-                                    sessionQueueSize);
+            loopsGroup);
         final BrokerConfiguration brokerConfig = new BrokerConfiguration(config);
         MQTTConnectionFactory connectionFactory = new MQTTConnectionFactory(brokerConfig, authenticator, sessions,
                                                                             dispatcher);
 
         final NewNettyMQTTHandler mqttHandler = new NewNettyMQTTHandler(connectionFactory);
         acceptor = new NewNettyAcceptor();
-        acceptor.initialize(mqttHandler, config, sslCtxCreator);
+        acceptor.initialize(mqttHandler, config, sslCtxCreator, brokerConfig);
 
         final long startTime = System.currentTimeMillis() - start;
         LOG.info("Moquette integration has been started successfully in {} ms", startTime);
@@ -218,15 +263,37 @@ public class Server {
         initialized = true;
     }
 
+    private static IQueueRepository initQueuesRepository(IConfig config, Path dataPath, H2Builder h2Builder) throws IOException {
+        final IQueueRepository queueRepository;
+        final String queueType = config.getProperty(IConfig.PERSISTENT_QUEUE_TYPE_PROPERTY_NAME);
+        if ("h2".equalsIgnoreCase(queueType)) {
+            LOG.info("Configuring H2 queue store");
+            queueRepository = h2Builder.queueRepository();
+        } else if ("segmented".equalsIgnoreCase(queueType)) {
+            LOG.info("Configuring segmented queue store to {}", dataPath);
+            final int pageSize = config.intProp(BrokerConstants.SEGMENTED_QUEUE_PAGE_SIZE, BrokerConstants.DEFAULT_SEGMENTED_QUEUE_PAGE_SIZE);
+            final int segmentSize = config.intProp(BrokerConstants.SEGMENTED_QUEUE_SEGMENT_SIZE, BrokerConstants.DEFAULT_SEGMENTED_QUEUE_SEGMENT_SIZE);
+            try {
+                queueRepository = new SegmentQueueRepository(dataPath, pageSize, segmentSize);
+            } catch (QueueException e) {
+                throw new IOException("Problem in configuring persistent queue on path " + dataPath, e);
+            }
+        } else {
+            final String errMsg = String.format("Invalid property for %s found [%s] while only h2 or segmented are admitted", IConfig.PERSISTENT_QUEUE_TYPE_PROPERTY_NAME, queueType);
+            throw new RuntimeException(errMsg);
+        }
+        return queueRepository;
+    }
+
     private IAuthorizatorPolicy initializeAuthorizatorPolicy(IAuthorizatorPolicy authorizatorPolicy, IConfig props) {
         LOG.debug("Configuring MQTT authorizator policy");
-        String authorizatorClassName = props.getProperty(BrokerConstants.AUTHORIZATOR_CLASS_NAME, "");
+        String authorizatorClassName = props.getProperty(IConfig.AUTHORIZATOR_CLASS_NAME, "");
         if (authorizatorPolicy == null && !authorizatorClassName.isEmpty()) {
             authorizatorPolicy = loadClass(authorizatorClassName, IAuthorizatorPolicy.class, IConfig.class, props);
         }
 
         if (authorizatorPolicy == null) {
-            String aclFilePath = props.getProperty(BrokerConstants.ACL_FILE_PROPERTY_NAME, "");
+            String aclFilePath = props.getProperty(IConfig.ACL_FILE_PROPERTY_NAME, "");
             if (aclFilePath != null && !aclFilePath.isEmpty()) {
                 authorizatorPolicy = new DenyAllAuthorizatorPolicy();
                 try {
@@ -246,7 +313,7 @@ public class Server {
 
     private IAuthenticator initializeAuthenticator(IAuthenticator authenticator, IConfig props) {
         LOG.debug("Configuring MQTT authenticator");
-        String authenticatorClassName = props.getProperty(BrokerConstants.AUTHENTICATOR_CLASS_NAME, "");
+        String authenticatorClassName = props.getProperty(IConfig.AUTHENTICATOR_CLASS_NAME, "");
 
         if (authenticator == null && !authenticatorClassName.isEmpty()) {
             authenticator = loadClass(authenticatorClassName, IAuthenticator.class, IConfig.class, props);
@@ -254,7 +321,7 @@ public class Server {
 
         IResourceLoader resourceLoader = props.getResourceLoader();
         if (authenticator == null) {
-            String passwdPath = props.getProperty(BrokerConstants.PASSWORD_FILE_PROPERTY_NAME, "");
+            String passwdPath = props.getProperty(IConfig.PASSWORD_FILE_PROPERTY_NAME, "");
             if (passwdPath.isEmpty()) {
                 authenticator = new AcceptAllAuthenticator();
             } else {
@@ -341,6 +408,10 @@ public class Server {
 
     public void stopServer() {
         LOG.info("Unbinding integration from the configured ports");
+        if (acceptor == null) {
+            LOG.error("Closing a badly started server, exit immediately");
+            return;
+        }
         acceptor.close();
         LOG.trace("Stopping MQTT protocol processor");
         initialized = false;
@@ -348,6 +419,8 @@ public class Server {
         // calling shutdown() does not actually stop tasks that are not cancelled,
         // and SessionsRepository does not stop its tasks. Thus shutdownNow().
         scheduler.shutdownNow();
+
+        sessions.close();
 
         if (h2Builder != null) {
             LOG.trace("Shutting down H2 persistence");
@@ -415,6 +488,30 @@ public class Server {
      * Return a list of descriptors of connected clients.
      * */
     public Collection<ClientDescriptor> listConnectedClients() {
+        if (!initialized) {
+            LOG.error("Moquette is not started, MQTT clients listing unavailable");
+            throw new IllegalStateException("Can't get clients list from a Server that is not yet started");
+        }
         return sessions.listConnectedClients();
+    }
+    /**
+     * Force the disconnection of a client, closing the related session.
+     * @param clientId the name of the client to drop session.
+     */
+    public boolean disconnectClient(final String clientId) {
+        return sessions.dropSession(clientId, false);
+    }
+
+    /**
+     * Force the disconnection of a client, closing the related session and removing any session state from
+     * the broker, such as subscriptions and queue.
+     * @param clientId the name of the client to drop session.
+     */
+    public boolean disconnectAndPurgeClientState(final String clientId) {
+        return sessions.dropSession(clientId, true);
+    }
+
+    public FluentConfig withConfig() {
+        return new FluentConfig(this);
     }
 }

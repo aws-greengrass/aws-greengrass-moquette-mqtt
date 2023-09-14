@@ -5,11 +5,11 @@
         <relativePath>../pom.xml</relativePath>
         <artifactId>moquette-parent</artifactId>
         <groupId>io.moquette</groupId>
-        <version>0.16-gg</version>
+        <version>0.17-gg</version>
     </parent>
 
     <artifactId>embedded_test</artifactId>
-    <packaging>pom</packaging>
+    <packaging>jar</packaging>
     <name>Moquette - Embedded test</name>
 
     <dependencies>

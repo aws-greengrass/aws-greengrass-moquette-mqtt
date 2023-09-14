@@ -30,6 +30,11 @@ public class MemoryQueueRepository implements IQueueRepository {
         return queue;
     }
 
+    @Override
+    public void close() {
+        queues.clear();
+    }
+
     void dropQueue(String queueName) {
         queues.remove(queueName);
     }

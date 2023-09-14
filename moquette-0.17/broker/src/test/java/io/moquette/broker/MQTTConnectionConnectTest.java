@@ -30,6 +30,7 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttVersion;
 import io.netty.handler.ssl.SslHandler;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -41,10 +42,14 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
 
+import static io.moquette.BrokerConstants.NO_BUFFER_FLUSH;
+import static io.moquette.broker.MQTTConnectionPublishTest.memorySessionsRepository;
 import static io.moquette.broker.NettyChannelAssertions.assertEqualsConnAck;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
@@ -71,13 +76,15 @@ public class MQTTConnectionConnectTest {
     private EmbeddedChannel channel;
     private SessionRegistry sessionRegistry;
     private MqttMessageBuilders.ConnectBuilder connMsg;
-    private static final BrokerConfiguration CONFIG = new BrokerConfiguration(true, true, false, false);
+    private static final BrokerConfiguration CONFIG = new BrokerConfiguration(true, true, false, NO_BUFFER_FLUSH);
     private IAuthenticator mockAuthenticator;
     private PostOffice postOffice;
     private MemoryQueueRepository queueRepository;
+    private ScheduledExecutorService scheduler;
 
     @BeforeEach
     public void setUp() {
+        scheduler = Executors.newScheduledThreadPool(1);
         connMsg = MqttMessageBuilders.connect().protocolVersion(MqttVersion.MQTT_3_1).cleanSession(true);
 
         mockAuthenticator = new MockAuthenticator(singleton(FAKE_CLIENT_ID), singletonMap(TEST_USER, TEST_PWD));
@@ -89,12 +96,18 @@ public class MQTTConnectionConnectTest {
 
         final PermitAllAuthorizatorPolicy authorizatorPolicy = new PermitAllAuthorizatorPolicy();
         final Authorizator permitAll = new Authorizator(authorizatorPolicy);
-        sessionRegistry = new SessionRegistry(subscriptions, queueRepository, permitAll);
+        final SessionEventLoopGroup loopsGroup = new SessionEventLoopGroup(ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, 1024);
+        sessionRegistry = new SessionRegistry(subscriptions, memorySessionsRepository(), queueRepository, permitAll, scheduler, loopsGroup);
         postOffice = new PostOffice(subscriptions, new MemoryRetainedRepository(), sessionRegistry,
-                                    ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, permitAll, 1024);
+                                    ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, permitAll, loopsGroup);
 
         sut = createMQTTConnection(CONFIG);
         channel = (EmbeddedChannel) sut.channel;
+    }
+
+    @AfterEach
+    public void tearDown() {
+        scheduler.shutdown();
     }
 
     private MQTTConnection createMQTTConnection(BrokerConfiguration config) {
@@ -239,7 +252,7 @@ public class MQTTConnectionConnectTest {
     public void peerCertAsUsernameAuthentication() throws CertificateEncodingException, IOException, InterruptedException {
         final byte[] PEER_CERT_BYTES = "PEER_CERT".getBytes(StandardCharsets.UTF_8);
         MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).build();
-        BrokerConfiguration config = new BrokerConfiguration(false, false, false, false, true);
+        BrokerConfiguration config = new BrokerConfiguration(false, false, false, 100, true);
         Certificate peerCertificate = mock(Certificate.class);
 
         // Add SslHandler to channel
@@ -265,7 +278,7 @@ public class MQTTConnectionConnectTest {
     public void peerCertAsUsernameAuthentication_badCert() throws CertificateEncodingException, IOException, InterruptedException {
         final byte[] PEER_CERT_BYTES = "BAD_PEER_CERT".getBytes(StandardCharsets.UTF_8);
         MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).build();
-        BrokerConfiguration config = new BrokerConfiguration(false, false, false, false, true);
+        BrokerConfiguration config = new BrokerConfiguration(false, false, false, 100, true);
         Certificate peerCertificate = mock(Certificate.class);
 
         // Add SslHandler to channel
@@ -289,7 +302,7 @@ public class MQTTConnectionConnectTest {
     @Test
     public void prohibitAnonymousClient() {
         MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).build();
-        BrokerConfiguration config = new BrokerConfiguration(false, true, false, false);
+        BrokerConfiguration config = new BrokerConfiguration(false, true, false, NO_BUFFER_FLUSH);
 
         sut = createMQTTConnection(config);
         channel = (EmbeddedChannel) sut.channel;
@@ -307,7 +320,7 @@ public class MQTTConnectionConnectTest {
         MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID)
             .username(TEST_USER + "_fake")
             .build();
-        BrokerConfiguration config = new BrokerConfiguration(false, true, false, false);
+        BrokerConfiguration config = new BrokerConfiguration(false, true, false, NO_BUFFER_FLUSH);
 
         createMQTTConnection(config);
 
@@ -321,7 +334,7 @@ public class MQTTConnectionConnectTest {
 
     @Test
     public void testZeroByteClientIdNotAllowed() {
-        BrokerConfiguration config = new BrokerConfiguration(false, false, false, false);
+        BrokerConfiguration config = new BrokerConfiguration(false, false, false, NO_BUFFER_FLUSH);
 
         sut = createMQTTConnection(config);
         channel = (EmbeddedChannel) sut.channel;
@@ -372,7 +385,7 @@ public class MQTTConnectionConnectTest {
         EmbeddedChannel evilChannel = new EmbeddedChannel();
 
         // Exercise
-        BrokerConfiguration config = new BrokerConfiguration(true, true, false, false);
+        BrokerConfiguration config = new BrokerConfiguration(true, true, false, NO_BUFFER_FLUSH);
         final MQTTConnection evilConnection = createMQTTConnection(config, evilChannel, postOffice);
         evilConnection.processConnect(evilClientConnMsg);
 
