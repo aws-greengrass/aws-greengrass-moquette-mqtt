@@ -182,6 +182,9 @@ public class MQTTService extends PluginService {
         //Disable plain TCP port
         p.setProperty(BrokerConstants.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);
 
+        // Telemetry is actually deleted from the code base, but just set the flag here to be sure.
+        p.setProperty(BrokerConstants.ENABLE_TELEMETRY_NAME, "false");
+
         return p;
     }
 }

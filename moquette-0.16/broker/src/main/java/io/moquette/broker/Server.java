@@ -16,16 +16,24 @@
 package io.moquette.broker;
 
 import io.moquette.BrokerConstants;
-import io.moquette.broker.config.*;
+import io.moquette.broker.config.FileResourceLoader;
+import io.moquette.broker.config.IConfig;
+import io.moquette.broker.config.IResourceLoader;
+import io.moquette.broker.config.MemoryConfig;
+import io.moquette.broker.config.ResourceLoaderConfig;
+import io.moquette.broker.security.ACLFileParser;
+import io.moquette.broker.security.AcceptAllAuthenticator;
+import io.moquette.broker.security.DenyAllAuthorizatorPolicy;
+import io.moquette.broker.security.IAuthenticator;
+import io.moquette.broker.security.IAuthorizatorPolicy;
+import io.moquette.broker.security.PermitAllAuthorizatorPolicy;
+import io.moquette.broker.security.ResourceAuthenticator;
 import io.moquette.interception.InterceptHandler;
 import io.moquette.persistence.H2Builder;
 import io.moquette.persistence.MemorySubscriptionsRepository;
 import io.moquette.interception.BrokerInterceptor;
-import io.moquette.broker.security.*;
 import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
 import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
-import io.moquette.broker.security.IAuthenticator;
-import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +42,11 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -43,6 +55,7 @@ import static io.moquette.logging.LoggingUtils.getInterceptorIds;
 public class Server {
 
     private static final Logger LOG = LoggerFactory.getLogger(io.moquette.broker.Server.class);
+    public static final String MOQUETTE_VERSION = "0.16";
 
     private ScheduledExecutorService scheduler;
     private NewNettyAcceptor acceptor;
@@ -51,15 +64,16 @@ public class Server {
     private BrokerInterceptor interceptor;
     private H2Builder h2Builder;
     private SessionRegistry sessions;
+    private boolean standalone = false;
 
     public static void main(String[] args) throws IOException {
         final Server server = new Server();
         try {
-            server.startServer();
+            server.startStandaloneServer();
         } catch (RuntimeException e) {
             System.exit(1);
         }
-        System.out.println("Server started, version 0.16-gg");
+        System.out.println("Server started, version " + MOQUETTE_VERSION);
         //Bind a shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(server::stopServer));
     }
@@ -75,6 +89,11 @@ public class Server {
         IResourceLoader filesystemLoader = new FileResourceLoader(defaultConfigurationFile);
         final IConfig config = new ResourceLoaderConfig(filesystemLoader);
         startServer(config);
+    }
+
+    private void startStandaloneServer() throws IOException {
+        this.standalone = true;
+        startServer();
     }
 
     private static File defaultConfigFile() {
@@ -195,6 +214,7 @@ public class Server {
 
         final long startTime = System.currentTimeMillis() - start;
         LOG.info("Moquette integration has been started successfully in {} ms", startTime);
+
         initialized = true;
     }
 

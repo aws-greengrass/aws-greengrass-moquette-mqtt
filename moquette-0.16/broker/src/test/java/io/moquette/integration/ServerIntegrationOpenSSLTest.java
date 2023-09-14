@@ -16,10 +16,6 @@
 
 package io.moquette.integration;
 
-import java.io.IOException;
-import java.util.Properties;
-import java.util.function.BooleanSupplier;
-
 import io.moquette.BrokerConstants;
 import io.moquette.broker.Server;
 import io.netty.handler.ssl.OpenSsl;
@@ -28,6 +24,10 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Properties;
+import java.util.function.BooleanSupplier;
 
 /**
  * Check that Moquette could also handle SSL with OpenSSL provider.
@@ -56,6 +56,8 @@ public class ServerIntegrationOpenSSLTest extends ServerIntegrationSSLTest {
         sslProps.put(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
         sslProps.put(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, "passw0rdsrv");
         sslProps.put(BrokerConstants.PERSISTENT_STORE_PROPERTY_NAME, dbPath);
+
+        sslProps.put(BrokerConstants.ENABLE_TELEMETRY_NAME, "false");
         m_server.startServer(sslProps);
     }
 
