@@ -162,21 +162,21 @@ public class MQTTService extends PluginService {
         Topics moquetteTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, "moquette");
 
         String password = brokerKeyStore.getJksPassword();
-        p.setProperty(BrokerConstants.HOST_PROPERTY_NAME,
-            Coerce.toString(moquetteTopics.lookup(BrokerConstants.HOST_PROPERTY_NAME).dflt(BrokerConstants.HOST)));
+        p.setProperty(IConfig.HOST_PROPERTY_NAME,
+            Coerce.toString(moquetteTopics.lookup(IConfig.HOST_PROPERTY_NAME).dflt(BrokerConstants.HOST)));
         // Due to a deserialization bug in GSON during group deployments, this value can become a floating point
         // instead of an int. As a workaround, coerce to an int before converting back to a string
-        p.setProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME,
-            String.valueOf(Coerce.toInt(moquetteTopics.lookup(BrokerConstants.SSL_PORT_PROPERTY_NAME).dflt("8883"))));
-        p.setProperty(BrokerConstants.JKS_PATH_PROPERTY_NAME, brokerKeyStore.getJksPath());
-        p.setProperty(BrokerConstants.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
-        p.setProperty(BrokerConstants.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
-        p.setProperty(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, "false");
+        p.setProperty(IConfig.SSL_PORT_PROPERTY_NAME,
+            String.valueOf(Coerce.toInt(moquetteTopics.lookup(IConfig.SSL_PORT_PROPERTY_NAME).dflt("8883"))));
+        p.setProperty(IConfig.JKS_PATH_PROPERTY_NAME, brokerKeyStore.getJksPath());
+        p.setProperty(IConfig.KEY_STORE_PASSWORD_PROPERTY_NAME, password);
+        p.setProperty(IConfig.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
+        p.setProperty(IConfig.ALLOW_ANONYMOUS_PROPERTY_NAME, "false");
         p.setProperty(BrokerConstants.PEER_CERTIFICATE_AS_USERNAME, "true");
         p.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
-        p.setProperty(BrokerConstants.IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME, "true");
-        p.setProperty(BrokerConstants.NETTY_MAX_BYTES_PROPERTY_NAME, String.valueOf(Coerce
-            .toInt(moquetteTopics.lookup(BrokerConstants.NETTY_MAX_BYTES_PROPERTY_NAME).dflt("131072")))); // 128KiB
+        p.setProperty(IConfig.BUFFER_FLUSH_MS_PROPERTY_NAME, "0");
+        p.setProperty(IConfig.NETTY_MAX_BYTES_PROPERTY_NAME, String.valueOf(Coerce
+            .toInt(moquetteTopics.lookup(IConfig.NETTY_MAX_BYTES_PROPERTY_NAME).dflt("131072")))); // 128KiB
         p.setProperty(BrokerConstants.NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME, "TLSv1.2");
         p.setProperty(BrokerConstants.NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME, Coerce.toString(
             rootConfig.lookup(BrokerConstants.NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME)
@@ -186,10 +186,12 @@ public class MQTTService extends PluginService {
                 .dflt(BrokerConstants.DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES)));
 
         //Disable plain TCP port
-        p.setProperty(BrokerConstants.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);
+        p.setProperty(IConfig.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);
 
         // Telemetry is actually deleted from the code base, but just set the flag here to be sure.
-        p.setProperty(BrokerConstants.ENABLE_TELEMETRY_NAME, "false");
+        p.setProperty(IConfig.ENABLE_TELEMETRY_NAME, "false");
+
+        p.setProperty(IConfig.PERSISTENCE_ENABLED_PROPERTY_NAME, "false");
 
         return p;
     }
