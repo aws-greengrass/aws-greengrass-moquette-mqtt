@@ -63,7 +63,7 @@ public final class IntegrationUtils {
         testProperties.put(PERSISTENCE_ENABLED_PROPERTY_NAME, "true");
         testProperties.put(PORT_PROPERTY_NAME, "1883");
         testProperties.put(ENABLE_TELEMETRY_NAME, "false");
-        testProperties.put(PERSISTENT_QUEUE_TYPE_PROPERTY_NAME, "segmented");
+        testProperties.put(PERSISTENT_QUEUE_TYPE_PROPERTY_NAME, "h2");
         return testProperties;
     }
 

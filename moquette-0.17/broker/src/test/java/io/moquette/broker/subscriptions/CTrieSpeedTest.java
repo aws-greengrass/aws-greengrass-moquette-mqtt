@@ -15,16 +15,20 @@
  */
 package io.moquette.broker.subscriptions;
 
-import static io.moquette.broker.subscriptions.Topic.asTopic;
 import io.netty.handler.codec.mqtt.MqttQoS;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+import static io.moquette.broker.subscriptions.Topic.asTopic;
+
+@Disabled("No perf testing")
 public class CTrieSpeedTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CTrieSpeedTest.class.getName());

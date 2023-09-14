@@ -34,6 +34,7 @@ public class BrokerConfigurationTest {
         assertFalse(brokerConfiguration.isAllowZeroByteClientId());
         assertFalse(brokerConfiguration.isReauthorizeSubscriptionsOnConnect());
         assertEquals(IMMEDIATE_BUFFER_FLUSH, brokerConfiguration.getBufferFlushMillis(), "Immediate flush by default");
+        assertFalse(brokerConfiguration.isPeerCertificateAsUsername());
     }
 
     @Test
@@ -46,6 +47,7 @@ public class BrokerConfigurationTest {
         assertFalse(brokerConfiguration.isAllowZeroByteClientId());
         assertFalse(brokerConfiguration.isReauthorizeSubscriptionsOnConnect());
         assertEquals(IMMEDIATE_BUFFER_FLUSH, brokerConfiguration.getBufferFlushMillis(), "Immediate flush by default");
+        assertFalse(brokerConfiguration.isPeerCertificateAsUsername());
     }
 
     @Test
@@ -58,6 +60,7 @@ public class BrokerConfigurationTest {
         assertTrue(brokerConfiguration.isAllowZeroByteClientId());
         assertFalse(brokerConfiguration.isReauthorizeSubscriptionsOnConnect());
         assertEquals(IMMEDIATE_BUFFER_FLUSH, brokerConfiguration.getBufferFlushMillis(), "Immediate flush by default");
+        assertFalse(brokerConfiguration.isPeerCertificateAsUsername());
     }
 
     @Test
@@ -70,6 +73,7 @@ public class BrokerConfigurationTest {
         assertFalse(brokerConfiguration.isAllowZeroByteClientId());
         assertTrue(brokerConfiguration.isReauthorizeSubscriptionsOnConnect());
         assertEquals(IMMEDIATE_BUFFER_FLUSH, brokerConfiguration.getBufferFlushMillis(), "Immediate flush by default");
+        assertFalse(brokerConfiguration.isPeerCertificateAsUsername());
     }
 
     @Test
@@ -82,5 +86,18 @@ public class BrokerConfigurationTest {
         assertFalse(brokerConfiguration.isAllowZeroByteClientId());
         assertFalse(brokerConfiguration.isReauthorizeSubscriptionsOnConnect());
         assertEquals(IMMEDIATE_BUFFER_FLUSH, brokerConfiguration.getBufferFlushMillis(), "No immediate flush by default");
+        assertFalse(brokerConfiguration.isPeerCertificateAsUsername());
+    }
+
+    @Test
+    public void configurePeerCertificateAsUsername() {
+        Properties properties = new Properties();
+        properties.put(BrokerConstants.PEER_CERTIFICATE_AS_USERNAME, "true");
+        MemoryConfig config = new MemoryConfig(properties);
+        BrokerConfiguration brokerConfiguration = new BrokerConfiguration(config);
+        assertTrue(brokerConfiguration.isAllowAnonymous());
+        assertFalse(brokerConfiguration.isAllowZeroByteClientId());
+        assertFalse(brokerConfiguration.isReauthorizeSubscriptionsOnConnect());
+        assertTrue(brokerConfiguration.isPeerCertificateAsUsername());
     }
 }

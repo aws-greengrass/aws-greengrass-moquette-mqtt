@@ -143,8 +143,14 @@ public class MQTTService extends PluginService {
         IConfig config = new MemoryConfig(properties);
         ISslContextCreator sslContextCreator =
             new GreengrassMoquetteSslContextCreator(config, clientDeviceTrustManager);
-        mqttBroker.startServer(config, interceptHandlers, sslContextCreator, clientDeviceAuthorizer,
-            clientDeviceAuthorizer);
+        try {
+            mqttBroker.startServer(config, interceptHandlers, sslContextCreator, clientDeviceAuthorizer,
+                clientDeviceAuthorizer);
+        } catch (IOException e) {
+            // IO Exception can only be thrown from H2 right now and we do not configure moquette to use h2.
+            serviceErrored(e);
+            return;
+        }
         serverRunning = true;
         runningProperties = properties;
     }
@@ -181,6 +187,9 @@ public class MQTTService extends PluginService {
 
         //Disable plain TCP port
         p.setProperty(BrokerConstants.PORT_PROPERTY_NAME, BrokerConstants.DISABLED_PORT_BIND);
+
+        // Telemetry is actually deleted from the code base, but just set the flag here to be sure.
+        p.setProperty(BrokerConstants.ENABLE_TELEMETRY_NAME, "false");
 
         return p;
     }

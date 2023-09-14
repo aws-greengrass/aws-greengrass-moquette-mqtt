@@ -42,17 +42,9 @@ import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.ParseException;
@@ -62,7 +54,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -269,10 +260,6 @@ public class Server {
         final long startTime = System.currentTimeMillis() - start;
         LOG.info("Moquette integration has been started successfully in {} ms", startTime);
 
-        if (config.boolProp(IConfig.ENABLE_TELEMETRY_NAME, true)) {
-            collectAndSendTelemetryDataAsynch(config);
-        }
-
         initialized = true;
     }
 
@@ -296,155 +283,6 @@ public class Server {
             throw new RuntimeException(errMsg);
         }
         return queueRepository;
-    }
-
-    private void collectAndSendTelemetryDataAsynch(IConfig config) {
-        final Thread telCollector = new Thread(() -> collectAndSendTelemetryData(config));
-        telCollector.start();
-    }
-
-    private void collectAndSendTelemetryData(IConfig config) {
-        final String uuid = checkOrCreateUUID(config);
-
-        final String telemetryDoc = collectTelemetryData(uuid);
-
-        try {
-            sendTelemetryData(telemetryDoc);
-        } catch (IOException e) {
-            LOG.info("Can't reach the telemetry collector");
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Original exception", e);
-            }
-        }
-    }
-
-    private String checkOrCreateUUID(IConfig config) {
-        final String storagePath = config.getProperty(IConfig.DATA_PATH_PROPERTY_NAME, "");
-        final Path uuidFilePath = Paths.get(storagePath, ".moquette_uuid");
-        if (Files.exists(uuidFilePath)) {
-            try {
-                return new String(Files.readAllBytes(uuidFilePath), StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                LOG.error("Problem accessing file path: {}", uuidFilePath, e);
-            }
-        }
-        final UUID uuid = UUID.randomUUID();
-        final FileWriter f;
-        try {
-            f = new FileWriter(uuidFilePath.toFile(), false);
-            f.write(uuid.toString());
-            f.close();
-        } catch (IOException e) {
-            LOG.error("Problem writing new UUID to file path: {}", uuidFilePath, e);
-        }
-
-        return uuid.toString();
-    }
-
-    /**
-     * @return a json string with the content of max mem, jvm version and similar telemetry data.
-     * @param uuid*/
-    private String collectTelemetryData(String uuid) {
-        final String remoteIp = "uncollected";
-        final String os = System.getProperty("os.name");
-        final String cpuArch = System.getProperty("os.arch");
-        final String jvmVersion = System.getProperty("java.specification.version");
-        final String jvmVendor = System.getProperty("java.vendor");
-        final long maxMemory = Runtime.getRuntime().maxMemory();
-        final String maxHeap = maxMemory == Long.MAX_VALUE ? "undefined" : Long.toString(maxMemory);
-
-        return String.format(
-            "{\"os\": \"%s\", " +
-                "\"cpu_arch\": \"%s\", " +
-                "\"jvm_version\": \"%s\", " +
-                "\"jvm_vendor\": \"%s\", " +
-                "\"broker_version\": \"%s\", " +
-                "\"standalone\": %s," +
-                "\"max_heap\": \"%s\", " +
-                "\"remote_ip\": \"%s\", " +
-                "\"uuid\": \"%s\"}",
-            os, cpuArch, jvmVersion, jvmVendor, MOQUETTE_VERSION, this.standalone, maxHeap, remoteIp, uuid);
-    }
-
-    private String retrievePublicIP() {
-        try {
-            URL url = new URL("http://whatismyip.akamai.com");
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            final int status = con.getResponseCode();
-            if (status != HttpURLConnection.HTTP_OK) {
-                LOG.debug("What's my IP service replied with {}", status);
-                return "";
-            }
-
-            BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-            return in.readLine();
-        } catch (Exception e) {
-            LOG.debug("Can't connect to what's my IP service");
-            return "";
-        }
-    }
-
-    private void sendTelemetryData(String telemetryDoc) throws IOException {
-        URL url = new URL("https://telemetry.moquette.io/api/v1/notify");
-        HttpURLConnection con = (HttpURLConnection) url.openConnection();
-        con.setRequestMethod("POST");
-        con.setRequestProperty("Content-Type", "application/json");
-        con.setRequestProperty("Accept", "application/json");
-        con.setInstanceFollowRedirects(true);
-
-        // POST
-        con.setDoOutput(true);
-        final byte[] input = telemetryDoc.getBytes("utf-8");
-        try (OutputStream os = con.getOutputStream()) {
-            os.write(input, 0, input.length);
-        }
-
-        int status = con.getResponseCode();
-        LOG.trace("Response code is {}", status);
-
-        boolean redirect = false;
-
-        // normally, 3xx is redirect
-        if (status != HttpURLConnection.HTTP_OK) {
-            if (status == HttpURLConnection.HTTP_MOVED_TEMP
-                || status == HttpURLConnection.HTTP_MOVED_PERM
-                || status == HttpURLConnection.HTTP_SEE_OTHER)
-                redirect = true;
-        }
-
-        LOG.trace("Response Code: {} ", status);
-
-        if (redirect) {
-
-            // get redirect url from "location" header field
-            String newUrl = con.getHeaderField("Location");
-
-            // open the new connnection again
-            con = (HttpURLConnection) new URL(newUrl).openConnection();
-            con.addRequestProperty("Accept-Language", "en-US,en;q=0.8");
-            con.addRequestProperty("User-Agent", "Mozilla");
-            con.addRequestProperty("Referer", "google.com");
-            con.setRequestMethod("POST");
-
-            // POST
-            con.setDoOutput(true);
-            try (OutputStream os = con.getOutputStream()) {
-                os.write(input, 0, input.length);
-            }
-
-            LOG.trace("Redirect to URL: {}", newUrl);
-        }
-
-        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-        String inputLine;
-        StringBuffer content = new StringBuffer();
-        while ((inputLine = in.readLine()) != null) {
-            content.append(inputLine);
-        }
-        in.close();
-        LOG.trace("Content: {}", content);
-
-        con.disconnect();
     }
 
     private IAuthorizatorPolicy initializeAuthorizatorPolicy(IAuthorizatorPolicy authorizatorPolicy, IConfig props) {
@@ -585,7 +423,7 @@ public class Server {
         sessions.close();
 
         if (h2Builder != null) {
-            LOG.trace("Shutting down H2 persistence {}");
+            LOG.trace("Shutting down H2 persistence");
             h2Builder.closeStore();
         }
 

@@ -1,3 +1,6 @@
 greengrass-build/
 integration/target/**
+moquette_messages.log
+target/
+.gradle/
 *.iml

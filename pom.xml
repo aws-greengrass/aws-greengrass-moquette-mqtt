@@ -15,7 +15,7 @@
     </licenses>
 
     <modules>
-        <module>moquette-0.16</module>
+        <module>moquette-0.17</module>
         <module>integration</module>
     </modules>
 </project>

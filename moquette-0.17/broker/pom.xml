@@ -5,7 +5,7 @@
         <relativePath>../pom.xml</relativePath>
         <artifactId>moquette-parent</artifactId>
         <groupId>io.moquette</groupId>
-        <version>0.17</version>
+        <version>0.17-gg</version>
     </parent>
 
     <artifactId>moquette-broker</artifactId>
@@ -14,12 +14,12 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <netty.version>4.1.93.Final</netty.version>
+        <netty.version>4.1.94.Final</netty.version>
         <!-- Check Netty pom.xm to know the right version of tcnative, for example
              https://github.com/netty/netty/blob/netty-4.1.93.Final/pom.xml#L625 -->
         <netty.tcnative.version>2.0.61.Final</netty.tcnative.version>
         <paho.version>1.2.5</paho.version>
-        <h2.version>2.1.212</h2.version>
+        <h2.version>2.2.220</h2.version>
     </properties>
 
     <dependencies>

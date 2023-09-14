@@ -107,12 +107,12 @@ public class MQTTMessageLogger extends ChannelDuplexHandler {
             case PUBREL:
             case PUBACK:
             case UNSUBACK:
-                LOG.info("{} {} <{}> packetID <{}>", direction, messageType, clientID, messageId(msg));
+                LOG.debug("{} {} <{}> packetID <{}>", direction, messageType, clientID, messageId(msg));
                 break;
             case SUBACK:
                 MqttSubAckMessage suback = (MqttSubAckMessage) msg;
                 final List<Integer> grantedQoSLevels = suback.payload().grantedQoSLevels();
-                LOG.info("{} SUBACK <{}> packetID <{}>, grantedQoses {}", direction, clientID, messageId(msg),
+                LOG.debug("{} SUBACK <{}> packetID <{}>, grantedQoses {}", direction, clientID, messageId(msg),
                     grantedQoSLevels);
                 break;
         }
