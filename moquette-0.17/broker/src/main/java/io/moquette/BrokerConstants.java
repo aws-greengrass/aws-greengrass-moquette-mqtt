@@ -75,6 +75,7 @@ public final class BrokerConstants {
     public static final String KEY_MANAGER_PASSWORD_PROPERTY_NAME = IConfig.KEY_MANAGER_PASSWORD_PROPERTY_NAME;
     @Deprecated
     public static final String ALLOW_ANONYMOUS_PROPERTY_NAME = IConfig.ALLOW_ANONYMOUS_PROPERTY_NAME;
+    public static final String PEER_CERTIFICATE_AS_USERNAME = "peer_certificate_as_username";
     public static final String REAUTHORIZE_SUBSCRIPTIONS_ON_CONNECT = "reauthorize_subscriptions_on_connect";
     public static final String ALLOW_ZERO_BYTE_CLIENT_ID_PROPERTY_NAME = "allow_zero_byte_client_id";
     @Deprecated
@@ -103,6 +104,7 @@ public final class BrokerConstants {
     public static final String NETTY_MAX_BYTES_PROPERTY_NAME = IConfig.NETTY_MAX_BYTES_PROPERTY_NAME;
     @Deprecated
     public static final int DEFAULT_NETTY_MAX_BYTES_IN_MESSAGE = IConfig.DEFAULT_NETTY_MAX_BYTES_IN_MESSAGE;
+    public static final String NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME = "netty.enabled.tls.protocols";
     /**
      * @deprecated use the BUFFER_FLUSH_MS_PROPERTY_NAME
      * */
@@ -125,6 +127,11 @@ public final class BrokerConstants {
     public static final String BUGSNAG_TOKEN_PROPERTY_NAME = "bugsnag.token";
 
     public static final String STORAGE_CLASS_NAME = "storage_class";
+
+    public static final String NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME = "netty.channel.write.limit";
+    public static final int DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES = 512 * 1024;
+    public static final String NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME = "netty.channel.read.limit";
+    public static final int DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES = 512 * 1024;
 
     @Deprecated
     public static final String PERSISTENT_CLIENT_EXPIRATION_PROPERTY_NAME = IConfig.PERSISTENT_CLIENT_EXPIRATION_PROPERTY_NAME;

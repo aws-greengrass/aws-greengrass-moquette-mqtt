@@ -1,10 +1,12 @@
 package io.moquette.broker.unsafequeues;
 
+import io.moquette.BrokerConstants;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
-import io.moquette.BrokerConstants;
-import io.moquette.broker.unsafequeues.Queue;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -17,16 +19,20 @@ import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Random;
 import java.util.function.Consumer;
 
 import static io.moquette.broker.unsafequeues.Queue.LENGTH_HEADER_SIZE;
-import org.junit.jupiter.api.Assertions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@DisabledOnOs(OS.WINDOWS)
 class QueueTest {
 
     private static final int PAGE_SIZE = BrokerConstants.DEFAULT_SEGMENTED_QUEUE_PAGE_SIZE;

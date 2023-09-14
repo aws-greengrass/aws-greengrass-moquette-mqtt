@@ -1,14 +1,14 @@
 package io.moquette.broker.unsafequeues;
 
+import io.moquette.BrokerConstants;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.moquette.BrokerConstants;
-import io.moquette.broker.unsafequeues.Queue;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -18,7 +18,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -32,6 +36,7 @@ import static io.moquette.broker.unsafequeues.QueueTest.generatePayload;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisabledOnOs(OS.WINDOWS)
 class QueuePoolTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(QueuePoolTest.class);

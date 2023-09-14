@@ -218,6 +218,11 @@ public class ClientDeviceAuthorizer implements IAuthenticator, IAuthorizatorPoli
             closeAuthSession(msg.getClientID(), msg.getUsername());
         }
 
+        @Override
+        public void onSessionLoopError(Throwable error) {
+            LOG.atWarn().log("Moquette session error", error);
+        }
+
         private void closeAuthSession(String clientId, String username) {
             UserSessionPair sessionPair = getSessionForClient(clientId, username);
             if (sessionPair != null) {

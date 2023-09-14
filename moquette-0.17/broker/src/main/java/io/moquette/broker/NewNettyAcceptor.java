@@ -18,10 +18,25 @@ package io.moquette.broker;
 
 import io.moquette.BrokerConstants;
 import io.moquette.broker.config.IConfig;
-import io.moquette.broker.metrics.*;
+import io.moquette.broker.metrics.BytesMetrics;
+import io.moquette.broker.metrics.BytesMetricsCollector;
+import io.moquette.broker.metrics.BytesMetricsHandler;
+import io.moquette.broker.metrics.DropWizardMetricsHandler;
+import io.moquette.broker.metrics.MQTTMessageLogger;
+import io.moquette.broker.metrics.MessageMetrics;
+import io.moquette.broker.metrics.MessageMetricsCollector;
+import io.moquette.broker.metrics.MessageMetricsHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.*;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandler;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -41,11 +56,11 @@ import io.netty.handler.codec.mqtt.MqttEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.handler.traffic.ChannelTrafficShapingHandler;
 import io.netty.util.concurrent.Future;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.SSLEngine;
 import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -54,8 +69,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import javax.net.ssl.SSLEngine;
 
-import static io.moquette.BrokerConstants.*;
+import static io.moquette.BrokerConstants.BUGSNAG_ENABLE_PROPERTY_NAME;
+import static io.moquette.BrokerConstants.DISABLED_PORT_BIND;
+import static io.moquette.BrokerConstants.IMMEDIATE_BUFFER_FLUSH;
+import static io.moquette.BrokerConstants.METRICS_ENABLE_PROPERTY_NAME;
+import static io.moquette.BrokerConstants.PORT_PROPERTY_NAME;
+import static io.moquette.BrokerConstants.SSL_PORT_PROPERTY_NAME;
+import static io.moquette.BrokerConstants.WEB_SOCKET_PORT_PROPERTY_NAME;
+import static io.moquette.BrokerConstants.WSS_PORT_PROPERTY_NAME;
 import static io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE;
 
 class NewNettyAcceptor {
@@ -134,7 +157,8 @@ class NewNettyAcceptor {
     private boolean nettySoKeepalive;
     private int nettyChannelTimeoutSeconds;
     private int maxBytesInMessage;
-
+    private int trafficMaxReadBytesPerSecondPerChannel;
+    private int trafficMaxWriteBytesPerSecondPerChannel;
     private Class<? extends ServerSocketChannel> channelClass;
 
     public void initialize(NewNettyMQTTHandler mqttHandler, IConfig props, ISslContextCreator sslCtxCreator, BrokerConfiguration brokerConfiguration) {
@@ -147,6 +171,10 @@ class NewNettyAcceptor {
         nettyChannelTimeoutSeconds = props.intProp(BrokerConstants.NETTY_CHANNEL_TIMEOUT_SECONDS_PROPERTY_NAME, 10);
         maxBytesInMessage = props.intProp(BrokerConstants.NETTY_MAX_BYTES_PROPERTY_NAME,
                 BrokerConstants.DEFAULT_NETTY_MAX_BYTES_IN_MESSAGE);
+        trafficMaxReadBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.NETTY_CHANNEL_READ_LIMIT_PROPERTY_NAME,
+            BrokerConstants.DEFAULT_NETTY_CHANNEL_READ_LIMIT_BYTES), 0);
+        trafficMaxWriteBytesPerSecondPerChannel = Math.max(props.intProp(BrokerConstants.NETTY_CHANNEL_WRITE_LIMIT_PROPERTY_NAME,
+            BrokerConstants.DEFAULT_NETTY_CHANNEL_WRITE_LIMIT_BYTES), 0);
 
         boolean epoll = props.boolProp(BrokerConstants.NETTY_EPOLL_PROPERTY_NAME, false);
         if (epoll) {
@@ -249,6 +277,11 @@ class NewNettyAcceptor {
                      DISABLED_PORT_BIND);
             return;
         }
+        if (trafficMaxReadBytesPerSecondPerChannel > 0 || trafficMaxWriteBytesPerSecondPerChannel > 0) {
+            LOG.debug("Per channel traffic shaping at {} write, {} read per second",
+                trafficMaxReadBytesPerSecondPerChannel, trafficMaxWriteBytesPerSecondPerChannel);
+        }
+
         int port = Integer.parseInt(tcpPortProp);
         final int writeFlushMillis = brokerConfiguration.getBufferFlushMillis();
         initFactory(host, port, PLAIN_MQTT_PROTO, new PipelineInitializer() {
@@ -272,6 +305,10 @@ class NewNettyAcceptor {
         pipeline.addFirst("bytemetrics", new BytesMetricsHandler(bytesMetricsCollector));
         if (writeFlushMillis > IMMEDIATE_BUFFER_FLUSH) {
             pipeline.addLast("autoflush", new AutoFlushHandler(writeFlushMillis, TimeUnit.MILLISECONDS));
+        }
+        if (trafficMaxReadBytesPerSecondPerChannel > 0 || trafficMaxWriteBytesPerSecondPerChannel > 0) {
+            pipeline.addLast("trafficShaping", new ChannelTrafficShapingHandler(trafficMaxWriteBytesPerSecondPerChannel,
+                trafficMaxReadBytesPerSecondPerChannel, TimeUnit.SECONDS.toMillis(1)));
         }
         pipeline.addLast("decoder", new MqttDecoder(maxBytesInMessage));
         pipeline.addLast("encoder", MqttEncoder.INSTANCE);

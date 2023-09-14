@@ -16,6 +16,15 @@
 
 package io.moquette.broker;
 
+import io.moquette.BrokerConstants;
+import io.moquette.broker.config.IConfig;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -32,17 +41,8 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.Objects;
-
-import io.moquette.BrokerConstants;
-import io.moquette.broker.config.IConfig;
-import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Moquette integration implementation to load SSL certificate from local filesystem path configured in
@@ -89,6 +89,14 @@ class DefaultMoquetteSslContextCreator implements ISslContextCreator {
             if (Boolean.valueOf(sNeedsClientAuth)) {
                 addClientAuthentication(ks, contextBuilder);
             }
+
+            // if enabled tls protocols are not provided, we use the default
+            String enabledTLSProtocols = props.getProperty(BrokerConstants.NETTY_ENABLED_TLS_PROTOCOLS_PROPERTY_NAME);
+            if (enabledTLSProtocols != null) {
+                LOG.info(String.format("Enabled TLS Protocols: {%s}", enabledTLSProtocols));
+                contextBuilder.protocols(enabledTLSProtocols.split(";"));
+            }
+
             contextBuilder.sslProvider(sslProvider);
             SslContext sslContext = contextBuilder.build();
             LOG.info("The SSL context has been initialized successfully.");
