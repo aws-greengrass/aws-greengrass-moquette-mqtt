@@ -155,6 +155,11 @@ public class MQTTService extends PluginService {
         runningProperties = properties;
     }
 
+    // visible for testing
+    String getRunningProperty(String key) {
+        return runningProperties == null ? null : runningProperties.getProperty(key);
+    }
+
     private Properties getProperties() {
         Properties p = new Properties();
 
@@ -173,6 +178,8 @@ public class MQTTService extends PluginService {
         p.setProperty(IConfig.KEY_MANAGER_PASSWORD_PROPERTY_NAME, password);
         p.setProperty(IConfig.ALLOW_ANONYMOUS_PROPERTY_NAME, "false");
         p.setProperty(BrokerConstants.PEER_CERTIFICATE_AS_USERNAME, "true");
+        p.setProperty(BrokerConstants.REJECT_UNAUTHORIZED_WILL, Coerce.toString(
+            moquetteTopics.lookup(BrokerConstants.REJECT_UNAUTHORIZED_WILL).dflt(Boolean.FALSE.toString())));
         p.setProperty(BrokerConstants.NEED_CLIENT_AUTH, "true");
         p.setProperty(IConfig.BUFFER_FLUSH_MS_PROPERTY_NAME, "0");
         p.setProperty(IConfig.NETTY_MAX_BYTES_PROPERTY_NAME, String.valueOf(Coerce

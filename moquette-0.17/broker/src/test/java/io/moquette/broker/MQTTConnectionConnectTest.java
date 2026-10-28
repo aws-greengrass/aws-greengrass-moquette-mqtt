@@ -16,10 +16,16 @@
 package io.moquette.broker;
 
 import io.moquette.broker.security.IAuthenticator;
+import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.security.PemUtils;
 import io.moquette.broker.security.PermitAllAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
+import io.moquette.interception.AbstractInterceptHandler;
+import io.moquette.interception.BrokerInterceptor;
+import io.moquette.interception.InterceptHandler;
+import io.moquette.interception.messages.InterceptConnectionLostMessage;
 import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
+import io.moquette.broker.subscriptions.Topic;
 import io.moquette.persistence.MemorySubscriptionsRepository;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -40,10 +46,14 @@ import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
@@ -54,13 +64,19 @@ import static io.moquette.broker.NettyChannelAssertions.assertEqualsConnAck;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -205,7 +221,27 @@ public class MQTTConnectionConnectTest {
         sut.handleConnectionLost();
 
         // Verify
-        verify(postOfficeMock).fireWill(any(Session.Will.class));
+        verify(postOfficeMock).fireWill(any(Session.Will.class), eq(FAKE_CLIENT_ID), isNull());
+        assertFalse(sut.isConnected(), "Connection MUST be disconnected");
+    }
+
+    @Test
+    public void testWillIsFiredWithAuthenticatedUsername() throws ExecutionException, InterruptedException {
+        // Pins that processConnectionLost hands the channel username (the cert PEM under Greengrass) to fireWill.
+        final PostOffice postOfficeSpy = spy(postOffice);
+        sut = createMQTTConnectionWithPostOffice(CONFIG, postOfficeSpy);
+        channel = (EmbeddedChannel) sut.channel;
+
+        MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).username(TEST_USER).password(TEST_PWD)
+            .willFlag(true).willTopic("topic").willMessage("Topic message").build();
+        sut.processConnect(msg).completableFuture().get();
+        assertEqualsConnAck(CONNECTION_ACCEPTED, channel.readOutbound());
+
+        // Exercise
+        sut.handleConnectionLost();
+
+        // Verify
+        verify(postOfficeSpy).fireWill(any(Session.Will.class), eq(FAKE_CLIENT_ID), eq(TEST_USER));
         assertFalse(sut.isConnected(), "Connection MUST be disconnected");
     }
 
@@ -232,6 +268,109 @@ public class MQTTConnectionConnectTest {
         // Verify
         assertEqualsConnAck(CONNECTION_ACCEPTED, channel.readOutbound());
         assertTrue(channel.isOpen(), "Connection is accepted and therefore must remain open");
+    }
+
+    private PostOffice createPostOfficeDenyingWillTopic(String willTopic) {
+        IAuthorizatorPolicy denyWill = mock(IAuthorizatorPolicy.class);
+        when(denyWill.canWrite(any(Topic.class), any(), anyString())).thenReturn(true);
+        when(denyWill.canWrite(eq(new Topic(willTopic)), eq(TEST_USER), eq(FAKE_CLIENT_ID))).thenReturn(false);
+        final SessionEventLoopGroup loopsGroup = new SessionEventLoopGroup(ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, 1024);
+        return new PostOffice(new CTrieSubscriptionDirectory(), new MemoryRetainedRepository(), sessionRegistry,
+            ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, new Authorizator(denyWill), loopsGroup);
+    }
+
+    @Test
+    public void rejectConnectWithUnauthorizedWillWhenFlagEnabled() {
+        final BrokerConfiguration rejectWill = new BrokerConfiguration(true, true, false, NO_BUFFER_FLUSH, false, true);
+        sut = createMQTTConnectionWithPostOffice(rejectWill, createPostOfficeDenyingWillTopic("forbidden"));
+        channel = (EmbeddedChannel) sut.channel;
+
+        MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).username(TEST_USER).password(TEST_PWD)
+            .willFlag(true).willTopic("forbidden").willMessage("bye").build();
+
+        // Exercise
+        sut.processConnect(msg);
+
+        // Verify
+        assertEqualsConnAck(CONNECTION_REFUSED_NOT_AUTHORIZED, channel.readOutbound());
+        assertFalse(channel.isOpen(), "Connection must be closed by the broker");
+        assertNull(sessionRegistry.retrieve(FAKE_CLIENT_ID), "No session must be created");
+    }
+
+    @Test
+    public void acceptConnectWithUnauthorizedWillWhenFlagDisabled() throws ExecutionException, InterruptedException {
+        sut = createMQTTConnectionWithPostOffice(CONFIG, createPostOfficeDenyingWillTopic("forbidden"));
+        channel = (EmbeddedChannel) sut.channel;
+
+        MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).username(TEST_USER).password(TEST_PWD)
+            .willFlag(true).willTopic("forbidden").willMessage("bye").build();
+
+        // Exercise
+        sut.processConnect(msg).completableFuture().get();
+
+        // Verify
+        assertEqualsConnAck(CONNECTION_ACCEPTED, channel.readOutbound());
+        assertTrue(channel.isOpen(), "Connection is accepted and therefore must remain open");
+        assertNotNull(sessionRegistry.retrieve(FAKE_CLIENT_ID));
+    }
+
+    @Test
+    public void rejectConnectWithInvalidWillTopicWhenFlagEnabled() {
+        // permitAll postOffice from setUp: rejection is driven by the invalid topic, not by canWrite
+        sut = createMQTTConnection(new BrokerConfiguration(true, true, false, NO_BUFFER_FLUSH, false, true));
+        channel = (EmbeddedChannel) sut.channel;
+
+        MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).username(TEST_USER).password(TEST_PWD)
+            .willFlag(true).willTopic("a/#/b").willMessage("bye").build();
+
+        // Exercise
+        sut.processConnect(msg);
+
+        // Verify
+        assertEqualsConnAck(CONNECTION_REFUSED_NOT_AUTHORIZED, channel.readOutbound());
+        assertFalse(channel.isOpen(), "Connection must be closed by the broker");
+        assertNull(sessionRegistry.retrieve(FAKE_CLIENT_ID), "No session must be created");
+    }
+
+    @Test
+    public void rejectConnectClosesAuthSessionWhenFlagEnabled() throws InterruptedException {
+        final CountDownLatch connLost = new CountDownLatch(1);
+        final List<InterceptHandler> handlers = Collections.singletonList(new AbstractInterceptHandler() {
+            @Override
+            public String getID() {
+                return "test-conn-lost-recorder";
+            }
+
+            @Override
+            public void onConnectionLost(InterceptConnectionLostMessage msg) {
+                connLost.countDown();
+            }
+
+            @Override
+            public void onSessionLoopError(Throwable error) {
+            }
+        });
+        final IAuthorizatorPolicy denyWill = mock(IAuthorizatorPolicy.class);
+        when(denyWill.canWrite(any(Topic.class), any(), anyString())).thenReturn(false);
+        final SessionEventLoopGroup loopsGroup =
+            new SessionEventLoopGroup(ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, 1024);
+        final PostOffice po = new PostOffice(new CTrieSubscriptionDirectory(), new MemoryRetainedRepository(),
+            sessionRegistry, new BrokerInterceptor(handlers), new Authorizator(denyWill), loopsGroup);
+
+        sut = createMQTTConnectionWithPostOffice(
+            new BrokerConfiguration(true, true, false, NO_BUFFER_FLUSH, false, true), po);
+        channel = (EmbeddedChannel) sut.channel;
+
+        MqttConnectMessage msg = connMsg.clientId(FAKE_CLIENT_ID).username(TEST_USER).password(TEST_PWD)
+            .willFlag(true).willTopic("forbidden").willMessage("bye").build();
+
+        // Exercise
+        sut.processConnect(msg);
+
+        // Verify: CDA auth session must be torn down via the connection-lost interceptor
+        assertEqualsConnAck(CONNECTION_REFUSED_NOT_AUTHORIZED, channel.readOutbound());
+        assertTrue(connLost.await(5, TimeUnit.SECONDS), "connectionLost must be dispatched to close the auth session");
+        po.terminate();
     }
 
     @Test

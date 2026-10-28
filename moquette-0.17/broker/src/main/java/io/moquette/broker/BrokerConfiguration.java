@@ -27,12 +27,14 @@ class BrokerConfiguration {
     private final boolean reauthorizeSubscriptionsOnConnect;
     private final int bufferFlushMillis;
     private final boolean peerCertificateAsUsername;
+    private final boolean rejectUnauthorizedWill;
 
     BrokerConfiguration(IConfig props) {
         allowAnonymous = props.boolProp(BrokerConstants.ALLOW_ANONYMOUS_PROPERTY_NAME, true);
         allowZeroByteClientId = props.boolProp(BrokerConstants.ALLOW_ZERO_BYTE_CLIENT_ID_PROPERTY_NAME, false);
         reauthorizeSubscriptionsOnConnect = props.boolProp(BrokerConstants.REAUTHORIZE_SUBSCRIPTIONS_ON_CONNECT, false);
         peerCertificateAsUsername = props.boolProp(BrokerConstants.PEER_CERTIFICATE_AS_USERNAME, false);
+        rejectUnauthorizedWill = props.boolProp(BrokerConstants.REJECT_UNAUTHORIZED_WILL, false);
 
         // BUFFER_FLUSH_MS_PROPERTY_NAME has precedence over the deprecated IMMEDIATE_BUFFER_FLUSH_PROPERTY_NAME
         final String bufferFlushMillisProp = props.getProperty(BrokerConstants.BUFFER_FLUSH_MS_PROPERTY_NAME);
@@ -73,11 +75,19 @@ class BrokerConfiguration {
     public BrokerConfiguration(boolean allowAnonymous, boolean allowZeroByteClientId,
                                boolean reauthorizeSubscriptionsOnConnect, int bufferFlushMillis,
                                boolean peerCertificateAsUsername) {
+        this(allowAnonymous, allowZeroByteClientId, reauthorizeSubscriptionsOnConnect, bufferFlushMillis,
+            peerCertificateAsUsername, false);
+    }
+
+    public BrokerConfiguration(boolean allowAnonymous, boolean allowZeroByteClientId,
+                               boolean reauthorizeSubscriptionsOnConnect, int bufferFlushMillis,
+                               boolean peerCertificateAsUsername, boolean rejectUnauthorizedWill) {
         this.allowAnonymous = allowAnonymous;
         this.allowZeroByteClientId = allowZeroByteClientId;
         this.reauthorizeSubscriptionsOnConnect = reauthorizeSubscriptionsOnConnect;
         this.bufferFlushMillis = bufferFlushMillis;
         this.peerCertificateAsUsername = peerCertificateAsUsername;
+        this.rejectUnauthorizedWill = rejectUnauthorizedWill;
     }
 
     public boolean isAllowAnonymous() {
@@ -98,5 +108,9 @@ class BrokerConfiguration {
 
     public boolean isPeerCertificateAsUsername() {
         return peerCertificateAsUsername;
+    }
+
+    public boolean isRejectUnauthorizedWill() {
+        return rejectUnauthorizedWill;
     }
 }

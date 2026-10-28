@@ -12,6 +12,7 @@ import com.aws.greengrass.clientdevices.auth.exception.CertificateGenerationExce
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.exceptions.ServiceLoadException;
+import io.moquette.BrokerConstants;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
@@ -112,5 +113,23 @@ public class MQTTServiceTest extends GGServiceTestUtil {
         assertThat(isListeningOnPort(9000), is(true));
         assertThat(isListeningOnPort(8883), is(false));
         assertThat(isListeningOnPort(1883), is(false));
+    }
+
+    @Test
+    void GIVEN_defaultConfig_WHEN_startComponent_THEN_rejectUnauthorizedWillIsOff()
+        throws InterruptedException, ServiceLoadException {
+        startNucleusWithConfig("config.yaml");
+
+        MQTTService service = (MQTTService) kernel.locate(MQTTService.SERVICE_NAME);
+        assertThat(service.getRunningProperty(BrokerConstants.REJECT_UNAUTHORIZED_WILL), equalTo("false"));
+    }
+
+    @Test
+    void GIVEN_rejectUnauthorizedWillConfigured_WHEN_startComponent_THEN_flagIsPassedToBroker()
+        throws InterruptedException, ServiceLoadException {
+        startNucleusWithConfig("rejectUnauthorizedWill.yaml");
+
+        MQTTService service = (MQTTService) kernel.locate(MQTTService.SERVICE_NAME);
+        assertThat(service.getRunningProperty(BrokerConstants.REJECT_UNAUTHORIZED_WILL), equalTo("true"));
     }
 }

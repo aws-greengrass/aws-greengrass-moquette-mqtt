@@ -198,9 +198,24 @@ class PostOffice {
         this.sessionRegistry = sessionRegistry;
     }
 
-    public void fireWill(Session.Will will) {
+    boolean canPublishWill(Topic topic, String username, String clientID) {
+        return authorizator.canWrite(topic, username, clientID);
+    }
+
+    public RoutingResults fireWill(Session.Will will, String clientID, String username) {
         // MQTT 3.1.2.8-17
-        publish2Subscribers(will.payload, new Topic(will.topic), will.qos);
+        final Topic topic = new Topic(will.topic);
+        if (!topic.isValid()) {
+            LOG.warn("MQTT client: {} has an invalid will topic: {}", clientID, topic);
+            ReferenceCountUtil.release(will.payload);
+            return RoutingResults.preroutingError();
+        }
+        if (!authorizator.canWrite(topic, username, clientID)) {
+            LOG.warn("MQTT client: {} is not authorized to publish will on topic: {}", clientID, topic);
+            ReferenceCountUtil.release(will.payload);
+            return RoutingResults.preroutingError();
+        }
+        return publish2Subscribers(will.payload, topic, will.qos);
     }
 
     public void subscribeClientToTopics(MqttSubscribeMessage msg, String clientID, String username,

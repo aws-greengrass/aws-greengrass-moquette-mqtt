@@ -77,6 +77,7 @@ public final class BrokerConstants {
     public static final String ALLOW_ANONYMOUS_PROPERTY_NAME = IConfig.ALLOW_ANONYMOUS_PROPERTY_NAME;
     public static final String PEER_CERTIFICATE_AS_USERNAME = "peer_certificate_as_username";
     public static final String REAUTHORIZE_SUBSCRIPTIONS_ON_CONNECT = "reauthorize_subscriptions_on_connect";
+    public static final String REJECT_UNAUTHORIZED_WILL = "reject_unauthorized_will";
     public static final String ALLOW_ZERO_BYTE_CLIENT_ID_PROPERTY_NAME = "allow_zero_byte_client_id";
     @Deprecated
     public static final String ACL_FILE_PROPERTY_NAME = IConfig.ACL_FILE_PROPERTY_NAME;

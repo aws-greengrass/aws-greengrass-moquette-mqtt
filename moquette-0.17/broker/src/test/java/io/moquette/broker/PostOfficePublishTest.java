@@ -15,6 +15,7 @@
  */
 package io.moquette.broker;
 
+import io.moquette.broker.security.IAuthorizatorPolicy;
 import io.moquette.broker.security.PermitAllAuthorizatorPolicy;
 import io.moquette.broker.subscriptions.CTrieSubscriptionDirectory;
 import io.moquette.broker.subscriptions.ISubscriptionsDirectory;
@@ -45,6 +46,9 @@ import static io.netty.handler.codec.mqtt.MqttQoS.EXACTLY_ONCE;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class PostOfficePublishTest {
 
@@ -446,5 +450,57 @@ public class PostOfficePublishTest {
         assertEquals(1, msgs.size());
         RetainedMessage msg = msgs.get(0);
         assertEquals(ByteBufUtil.hexDump(expectedPayload), ByteBufUtil.hexDump(msg.getPayload()));
+    }
+
+    @Test
+    public void testFireWillPublishesWhenAuthorized() throws ExecutionException, InterruptedException, TimeoutException {
+        connection.processConnect(connectMessage).completableFuture().get();
+        ConnectionTestUtils.assertConnectAccepted(channel);
+        subscribe(AT_MOST_ONCE, NEWS_TOPIC, connection);
+
+        final ByteBuf payload = Unpooled.copiedBuffer("Goodbye", Charset.defaultCharset());
+        final Session.Will will = new Session.Will(NEWS_TOPIC, payload, AT_MOST_ONCE, false);
+
+        sut.fireWill(will, "WillClient", TEST_USER).completableFuture().get(5, TimeUnit.SECONDS);
+
+        ConnectionTestUtils.verifyReceivePublish(channel, NEWS_TOPIC, "Goodbye");
+    }
+
+    @Test
+    public void testFireWillDroppedWhenNotAuthorized() throws ExecutionException, InterruptedException, TimeoutException {
+        connection.processConnect(connectMessage).completableFuture().get();
+        ConnectionTestUtils.assertConnectAccepted(channel);
+        subscribe(AT_MOST_ONCE, NEWS_TOPIC, connection);
+
+        IAuthorizatorPolicy denyWrite = mock(IAuthorizatorPolicy.class);
+        when(denyWrite.canWrite(eq(new Topic(NEWS_TOPIC)), eq(TEST_USER), eq("WillClient"))).thenReturn(false);
+        final SessionEventLoopGroup loopsGroup = new SessionEventLoopGroup(ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, 1024);
+        PostOffice denyingPostOffice = new PostOffice(subscriptions, retainedRepository, sessionRegistry,
+            ConnectionTestUtils.NO_OBSERVERS_INTERCEPTOR, new Authorizator(denyWrite), loopsGroup);
+
+        final ByteBuf payload = Unpooled.copiedBuffer("Goodbye", Charset.defaultCharset());
+        final Session.Will will = new Session.Will(NEWS_TOPIC, payload, AT_MOST_ONCE, false);
+
+        denyingPostOffice.fireWill(will, "WillClient", TEST_USER).completableFuture().get(5, TimeUnit.SECONDS);
+
+        verifyNoPublishIsReceived(channel);
+        assertEquals(0, payload.refCnt(), "Denied will payload must be released");
+        denyingPostOffice.terminate();
+    }
+
+    @Test
+    public void testFireWillDroppedWhenTopicInvalid() throws ExecutionException, InterruptedException, TimeoutException {
+        connection.processConnect(connectMessage).completableFuture().get();
+        ConnectionTestUtils.assertConnectAccepted(channel);
+        subscribe(AT_MOST_ONCE, NEWS_TOPIC, connection);
+
+        // permitAll authorizer: the drop is driven by the malformed topic, not by canWrite
+        final ByteBuf payload = Unpooled.copiedBuffer("Goodbye", Charset.defaultCharset());
+        final Session.Will will = new Session.Will("a/#/b", payload, AT_MOST_ONCE, false);
+
+        sut.fireWill(will, "WillClient", TEST_USER).completableFuture().get(5, TimeUnit.SECONDS);
+
+        verifyNoPublishIsReceived(channel);
+        assertEquals(0, payload.refCnt(), "Invalid-topic will payload must be released");
     }
 }

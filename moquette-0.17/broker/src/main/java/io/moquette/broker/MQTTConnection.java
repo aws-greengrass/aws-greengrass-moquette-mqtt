@@ -64,6 +64,7 @@ import static io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 import static io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader.from;
@@ -207,6 +208,23 @@ final class MQTTConnection {
             abortConnection(CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD);
             channel.close().addListener(CLOSE_ON_FAILURE);
             return PostOffice.RouteResult.failed(clientId);
+        }
+
+        if (brokerConfig.isRejectUnauthorizedWill() && msg.variableHeader().isWillFlag()) {
+            final Topic willTopic = new Topic(payload.willTopic());
+            final String willUsername = NettyUtils.userName(channel);
+            if (!willTopic.isValid() || !postOffice.canPublishWill(willTopic, willUsername, clientId)) {
+                if (!willTopic.isValid()) {
+                    LOG.warn("MQTT client: {} has an invalid will topic: {}", clientId, willTopic);
+                } else {
+                    LOG.warn("MQTT client: {} is not authorized to publish will on topic: {}", clientId, willTopic);
+                }
+                // login() already opened a CDA auth session; close it since executeConnect won't run
+                postOffice.dispatchConnectionLost(clientId, willUsername);
+                abortConnection(CONNECTION_REFUSED_NOT_AUTHORIZED);
+                channel.close().addListener(CLOSE_ON_FAILURE);
+                return PostOffice.RouteResult.failed(clientId);
+            }
         }
 
         final String sessionId = clientId;
@@ -390,8 +408,9 @@ final class MQTTConnection {
 
     // Invoked when a TCP connection drops and not when a client send DISCONNECT and close.
     private void processConnectionLost(String clientID) {
+        String userName = NettyUtils.userName(channel);
         if (bindedSession.hasWill()) {
-            postOffice.fireWill(bindedSession.getWill());
+            postOffice.fireWill(bindedSession.getWill(), clientID, userName);
         }
         if (bindedSession.connected()) {
             LOG.debug("Closing session on connectionLost {}", clientID);
@@ -399,7 +418,6 @@ final class MQTTConnection {
             connected = false;
         }
         //dispatch connection lost to intercept.
-        String userName = NettyUtils.userName(channel);
         postOffice.dispatchConnectionLost(clientID,userName);
         LOG.trace("dispatch disconnection: userName={}", userName);
     }
